@@ -47,8 +47,8 @@ Current endpoint coverage:
   - `/players` (paginated), `/players/topscorers`, `/players/topassists`, `/players/topyellowcards`, `/players/topredcards`
 - Team snapshots (all SPL teams):
   - `/teams/statistics`, `/injuries`, `/transfers`, `/players/squads`
-- Team deep details (configured team on run date):
-  - `/fixtures/statistics` (finished fixtures), `/fixtures/events`, `/fixtures/lineups`, `/fixtures/players`, `/predictions`
+- Team deep details (all finished league fixtures in season):
+  - `/fixtures/statistics`, `/fixtures/events`, `/fixtures/lineups`, `/fixtures/players`, `/predictions`
 
 Exit criteria:
 - Bronze coverage is sufficient for non-production analytics exploration.

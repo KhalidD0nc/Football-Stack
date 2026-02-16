@@ -31,6 +31,7 @@ On each stage transition:
 - [x] Add player-side endpoint ingestion family (`/players`, `/players/squads`, `/players/topscorers`, `/players/topassists`, `/players/topyellowcards`, `/players/topredcards`).
 - [x] Add `/fixtures/lineups` to match-detail ingestion.
 - [x] Add `/predictions` to match-detail ingestion.
+- [x] Expand match-detail ingestion scope to all finished fixtures in the league season.
 - [x] Implement and verify deterministic pagination for `/players`.
 - [x] Define and apply snapshot cadence for non-production exploration runs.
 - [x] Add per-endpoint run counters and failure visibility to run summary.

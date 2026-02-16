@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 import time
 from typing import Any
+from itertools import count as _count
 
 import requests
 from requests import RequestException
@@ -32,6 +33,8 @@ class ApiFootballClient:
     def __init__(self, base_url: str, api_key: str, rate_limit_per_sec: float = 5.0) -> None:
         self.base_url = base_url.rstrip("/")
         self.rate_limiter = SimpleRateLimiter(rate_limit_per_sec)
+        self._attempts_lock = threading.Lock()
+        self.total_attempts: int = 0
         self.session = requests.Session()
         self.session.headers.update(
             {
@@ -48,6 +51,9 @@ class ApiFootballClient:
     )
     def get(self, endpoint: str, params: dict[str, Any]) -> dict[str, Any]:
         self.rate_limiter.wait()
+
+        with self._attempts_lock:
+            self.total_attempts += 1
 
         url = f"{self.base_url}{endpoint}"
         try:

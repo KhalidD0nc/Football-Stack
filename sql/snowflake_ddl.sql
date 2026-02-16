@@ -234,26 +234,22 @@ CREATE TABLE IF NOT EXISTS raw_fixtures_players (
 );
 
 
--- Predictions
-CREATE TABLE IF NOT EXISTS raw_predictions (
-    raw VARIANT NOT NULL,
-    league_id INT,
-    season INT,
-    dt DATE,
-    run_id VARCHAR,
-    _file_name VARCHAR,
-    _loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
-);
 
--- Fixtures Statistics
+-- New tables
+CREATE TABLE IF NOT EXISTS raw_fixtures_events (
+    raw VARIANT NOT NULL, league_id INT, season INT, dt DATE, run_id VARCHAR, _file_name VARCHAR, _loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+);
+CREATE TABLE IF NOT EXISTS raw_fixtures_lineups (
+    raw VARIANT NOT NULL, league_id INT, season INT, dt DATE, run_id VARCHAR, _file_name VARCHAR, _loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+);
+CREATE TABLE IF NOT EXISTS raw_fixtures_players (
+    raw VARIANT NOT NULL, league_id INT, season INT, dt DATE, run_id VARCHAR, _file_name VARCHAR, _loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+);
 CREATE TABLE IF NOT EXISTS raw_fixtures_statistics (
-    raw VARIANT NOT NULL,
-    league_id INT,
-    season INT,
-    dt DATE,
-    run_id VARCHAR,
-    _file_name VARCHAR,
-    _loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+    raw VARIANT NOT NULL, league_id INT, season INT, dt DATE, run_id VARCHAR, _file_name VARCHAR, _loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+);
+CREATE TABLE IF NOT EXISTS raw_predictions (
+    raw VARIANT NOT NULL, league_id INT, season INT, dt DATE, run_id VARCHAR, _file_name VARCHAR, _loaded_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
 );
 
 -- =============================================================================
@@ -261,6 +257,273 @@ CREATE TABLE IF NOT EXISTS raw_fixtures_statistics (
 -- Each loads from the stage sub-path matching that endpoint.
 -- The metadata columns are extracted from the S3 path via METADATA$FILENAME.
 -- =============================================================================
+
+
+-- ============================================================
+-- COPY INTO for all 13 endpoints
+-- ============================================================
+
+-- 1. fixtures
+COPY INTO raw_fixtures (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT
+        $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+     FROM @LEAGUES_STAGE
+)
+PATTERN = '.*endpoint=fixtures/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
+
+-- 2. teams
+COPY INTO raw_teams (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT
+        $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+     FROM @LEAGUES_STAGE
+)
+PATTERN = '.*endpoint=teams/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
+
+-- 3. standings
+COPY INTO raw_standings (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT
+        $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+     FROM @LEAGUES_STAGE
+)
+PATTERN = '.*endpoint=standings/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
+
+-- 4. fixtures_rounds
+COPY INTO raw_fixtures_rounds (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT
+        $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+     FROM @LEAGUES_STAGE
+)
+PATTERN = '.*endpoint=fixtures_rounds/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
+
+-- 5. players
+COPY INTO raw_players (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT
+        $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+     FROM @LEAGUES_STAGE
+)
+PATTERN = '.*endpoint=players/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
+
+-- 6. players_topscorers
+COPY INTO raw_players_topscorers (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT
+        $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+     FROM @LEAGUES_STAGE
+)
+PATTERN = '.*endpoint=players_topscorers/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
+
+-- 7. players_topassists
+COPY INTO raw_players_topassists (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT
+        $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+     FROM @LEAGUES_STAGE
+)
+PATTERN = '.*endpoint=players_topassists/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
+
+-- 8. players_topyellowcards
+COPY INTO raw_players_topyellowcards (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT
+        $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+     FROM @LEAGUES_STAGE
+)
+PATTERN = '.*endpoint=players_topyellowcards/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
+
+-- 9. players_topredcards
+COPY INTO raw_players_topredcards (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT
+        $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+     FROM @LEAGUES_STAGE
+)
+PATTERN = '.*endpoint=players_topredcards/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
+
+-- 10. teams_statistics
+COPY INTO raw_teams_statistics (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT
+        $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+     FROM @LEAGUES_STAGE
+)
+PATTERN = '.*endpoint=teams_statistics/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
+
+-- 11. injuries
+COPY INTO raw_injuries (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT
+        $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+     FROM @LEAGUES_STAGE
+)
+PATTERN = '.*endpoint=injuries/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
+
+-- 12. transfers
+COPY INTO raw_transfers (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT
+        $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+     FROM @LEAGUES_STAGE
+)
+PATTERN = '.*endpoint=transfers/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
+
+-- 13. players_squads
+COPY INTO raw_players_squads (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT
+        $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+     FROM @LEAGUES_STAGE
+)
+PATTERN = '.*endpoint=players_squads/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
+
+
+-- COPY INTO for new endpoints
+COPY INTO raw_fixtures_events (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+    FROM @LEAGUES_STAGE
+)
+PATTERN = '.*raw/source=api_football/.*endpoint=fixtures_events/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
+
+COPY INTO raw_fixtures_lineups (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+    FROM @LEAGUES_STAGE
+)
+PATTERN = '.*raw/source=api_football/.*endpoint=fixtures_lineups/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
+
+COPY INTO raw_fixtures_players (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+    FROM @LEAGUES_STAGE
+)
+PATTERN = '.*raw/source=api_football/.*endpoint=fixtures_players/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
+
+COPY INTO raw_fixtures_statistics (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+    FROM @LEAGUES_STAGE
+)
+PATTERN = '.*raw/source=api_football/.*endpoint=fixtures_statistics/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
+
+COPY INTO raw_predictions (raw, league_id, season, dt, run_id, _file_name)
+FROM (
+    SELECT $1,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'league=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'season=([0-9]+)', 1, 1, 'e')::INT,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'dt=([0-9-]+)',    1, 1, 'e')::DATE,
+        REGEXP_SUBSTR(METADATA$FILENAME, 'run_id=([^/]+)',  1, 1, 'e'),
+        METADATA$FILENAME
+    FROM @LEAGUES_STAGE
+)
+PATTERN = '.*raw/source=api_football/.*endpoint=predictions/dt=.*/part-.*\\.json'
+FILE_FORMAT = json_raw;
 
 /*
 -- Example: load raw_fixtures
