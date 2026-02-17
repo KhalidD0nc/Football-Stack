@@ -4,7 +4,7 @@
 
 ## What Is This Project
 
-A **football data intelligence platform** for the Saudi Pro League (SPL). It powers a coaching/competitor analysis AI agent with comprehensive match, player, and team data.
+A **football data intelligence platform** for the Saudi Pro League (SPL). It powers a coaching and competitor analysis AI agent with comprehensive match, player, and team data. Additionally being built as a **public dataset** of the SPL 2025 season.
 
 **Goal:** Enable coaches to ask natural language questions like:
 - "How does Al Hilal's attack compare to Al Ittihad's defense?"
@@ -21,15 +21,15 @@ API-Football (v3) → Python ETL → S3 (raw JSON) → Snowflake (COPY INTO) →
 ```
 
 ### Tech Stack
-| Layer          | Technology                              |
-|----------------|----------------------------------------|
-| Data Source     | API-Football v3 (api-sports.io)        |
-| Extraction      | Python (boto3, requests)               |
-| Storage         | AWS S3 (`leagues-datalake` bucket)     |
-| Warehouse       | Snowflake                              |
-| Transformation  | dbt (dbt-snowflake)                    |
-| AI Agent        | TBD                                    |
-| AWS Region      | eu-north-1 (Stockholm)                 |
+
+| Layer        | Technology                       | Detail                                      |
+|--------------|----------------------------------|---------------------------------------------|
+| Data Source  | API-Football v3 (api-sports.io)  | League ID 307, Season 2025                  |
+| Extraction   | Python (boto3, requests, tenacity) | scripts/run_daily.py → src/pipeline/ingest.py |
+| Storage      | AWS S3                           | Bucket: leagues-datalake / Region: eu-north-1 |
+| Warehouse    | Snowflake                        | DB: LEAGUES_DATA / Schema: RAW              |
+| Transformation | dbt (dbt-snowflake)            | Project: leagues_data/                      |
+| AI Agent     | TBD                              | Will connect to dbt Gold layer marts        |
 
 ---
 
@@ -40,11 +40,13 @@ API-Football (v3) → Python ETL → S3 (raw JSON) → Snowflake (COPY INTO) →
 1. **Python ETL** — Extracts 18 endpoints from API-Football, saves to S3
 2. **S3 Storage** — Hive-style partitioned paths with idempotency tracking
 3. **Snowflake RAW** — 18 tables loaded via COPY INTO, JSON stored as VARIANT
+4. **Full Discovery** — All 18 tables explored, JSON structures mapped, data quality issues documented
 
-### 🔄 IN PROGRESS — Silver Layer (dbt Staging)
+### 🔄 NEXT — Staging Layer (dbt)
 
-- dbt project needs to be initialized
-- Staging models need to be written (flatten JSON → clean tables)
+- Build 15 staging models in dbt (flatten JSON → clean typed tables)
+- Domain-grouped folder structure: teams/, fixtures/, players/, transfers/
+- Full column extraction — public dataset philosophy (keep everything)
 
 ### ⬜ TODO — Gold Layer (dbt Marts)
 
@@ -61,28 +63,30 @@ API-Football (v3) → Python ETL → S3 (raw JSON) → Snowflake (COPY INTO) →
 
 ### 18 Endpoints Extracted
 
-| # | Endpoint | Scope | Files Per Run | Description |
-|---|----------|-------|---------------|-------------|
-| 1 | `/fixtures` | League | 1 | All 306 season fixtures & scores |
-| 2 | `/teams` | League | 1 | 18 SPL team profiles & venues |
-| 3 | `/standings` | League | 1 | League table (18 teams nested) |
-| 4 | `/fixtures/rounds` | League | 1 | Matchday/round names |
-| 5 | `/players` | League | ~34 | Paginated player season stats (20/page) |
-| 6 | `/players/topscorers` | League | 1 | Top goal scorers |
-| 7 | `/players/topassists` | League | 1 | Top assist providers |
-| 8 | `/players/topyellowcards` | League | 1 | Most yellow cards |
-| 9 | `/players/topredcards` | League | 1 | Most red cards |
-| 10 | `/teams/statistics` | Per team | 18 | Aggregated team season stats |
-| 11 | `/injuries` | Per team | 18 | Player injuries & suspensions |
-| 12 | `/transfers` | Per team | 18 | Transfer records |
-| 13 | `/players/squads` | Per team | 18 | Current roster per team |
-| 14 | `/fixtures/statistics` | Per fixture | ~58* | Match stats (possession, shots, etc.) |
-| 15 | `/fixtures/events` | Per fixture | ~58* | Goals, cards, substitutions |
-| 16 | `/fixtures/lineups` | Per fixture | ~58* | Formations, starters, bench |
-| 17 | `/fixtures/players` | Per fixture | ~58* | Per-player match performance |
-| 18 | `/predictions` | Per fixture | ~58* | Pre-match win predictions & comparison |
+| # | Endpoint | Scope | Raw Rows | Nested Records | Description |
+|---|----------|-------|----------|----------------|-------------|
+| 1 | `/fixtures` | League | 1 | 306 | All season fixtures & scores |
+| 2 | `/teams` | League | 1 | 18 | SPL team profiles & venues |
+| 3 | `/standings` | League | 1 | 18 | League table (18 teams nested) |
+| 4 | `/fixtures/rounds` | League | 1 | 34 | Matchday/round names |
+| 5 | `/players` | League | 34 | 666 | Paginated player season stats (20/page) |
+| 6 | `/players/topscorers` | League | 1 | 20 | Top goal scorers |
+| 7 | `/players/topassists` | League | 1 | 20 | Top assist providers |
+| 8 | `/players/topyellowcards` | League | 1 | 20 | Most yellow cards |
+| 9 | `/players/topredcards` | League | 1 | 20 | Most red cards |
+| 10 | `/teams/statistics` | Per team | 18 | 18 (1:1) | Aggregated team season stats |
+| 11 | `/injuries` | Per team | 18 | 2 total | Player injuries & suspensions |
+| 12 | `/transfers` | Per team | 18 | 2,573 | Transfer records |
+| 13 | `/players/squads` | Per team | 18 | 558 | Current roster per team |
+| 14 | `/fixtures/statistics` | Per fixture | 189 | 376 | Match stats — long format (18 stat types × 2 teams) |
+| 15 | `/fixtures/events` | Per fixture | 189 | 3,090 | Goals, cards, substitutions |
+| 16 | `/fixtures/lineups` | Per fixture | 190* | 7,514 | Formations, starters, bench |
+| 17 | `/fixtures/players` | Per fixture | 189 | 7,476 | Per-player match performance |
+| 18 | `/predictions` | Per fixture | 189 | 189 (1:1) | Pre-match win predictions |
 
-*58 = number of finished fixtures as of 2026-02-15. Grows as season progresses.
+*190 rows due to 1 accidental duplicate from a double pipeline run — handled via dedup in staging.
+
+**Total staging rows (estimated): ~23,000+**
 
 ---
 
@@ -125,13 +129,15 @@ Every file contains:
 ## Snowflake Setup
 
 ### Connection Details
-| Setting    | Value                |
-|------------|---------------------|
-| Database   | `LEAGUES_DATA`       |
-| Schema     | `RAW`                |
-| Warehouse  | (user-specific)      |
-| Stage      | `LEAGUES_STAGE`      |
-| File Format| `json_raw`           |
+
+| Setting     | Value                |
+|-------------|----------------------|
+| Database    | `LEAGUES_DATA`       |
+| Schema      | `RAW`                |
+| Warehouse   | (user-specific)      |
+| Stage       | `LEAGUES_STAGE`      |
+| File Format | `json_raw`           |
+| Auth        | Access keys (no IAM role) |
 
 ### Stage Configuration
 ```sql
@@ -142,9 +148,7 @@ CREATE STAGE LEAGUES_STAGE
   FILE_FORMAT = json_raw;
 ```
 
-### 18 RAW Tables
-
-All tables share the same schema:
+### 18 RAW Tables — Shared Schema
 ```sql
 CREATE TABLE raw_{endpoint} (
     raw             VARIANT        NOT NULL,   -- full JSON blob
@@ -155,16 +159,6 @@ CREATE TABLE raw_{endpoint} (
     _file_name      VARCHAR,                   -- S3 file path
     _loaded_at      TIMESTAMP_NTZ  DEFAULT CURRENT_TIMESTAMP()
 );
-```
-
-**Tables:**
-```
-raw_fixtures              raw_players_topscorers     raw_teams_statistics
-raw_teams                 raw_players_topassists     raw_injuries
-raw_standings             raw_players_topyellowcards raw_transfers
-raw_fixtures_rounds       raw_players_topredcards    raw_players_squads
-raw_players               raw_fixtures_statistics    raw_predictions
-raw_fixtures_events       raw_fixtures_lineups       raw_fixtures_players
 ```
 
 ### COPY INTO Pattern
@@ -187,23 +181,163 @@ FILE_FORMAT = json_raw;
 - COPY INTO is idempotent — Snowflake skips already-loaded files
 - Re-run same statements after each pipeline run to load new data
 
-### Data Volumes (as of 2026-02-15)
+---
 
-| Endpoint | Raw Rows | Nested Records (after FLATTEN) |
-|----------|----------|-------------------------------|
-| transfers | 18 | 2,573 |
-| players | 34 | 666 |
-| fixtures | 1 | 306 |
-| teams_statistics | 18 | 198 |
-| teams | 1 | 18 |
-| players_squads | 18 | 18 |
-| injuries | 18 | 2 |
-| standings | 1 | 1 (contains 18 teams nested) |
-| fixtures_events | ~58 | TBD |
-| fixtures_lineups | ~58 | TBD |
-| fixtures_players | ~58 | TBD |
-| fixtures_statistics | ~58 | TBD |
-| predictions | ~58 | TBD |
+## Discovery Findings
+
+Full data discovery was completed on all 18 RAW tables before building the staging layer.
+
+### Data Quality Issues Found
+
+| Issue | Table | Detail | Action |
+|-------|-------|--------|--------|
+| Wrong country | `raw_teams` | Al Khaleej Saihat → country = "United-Arab-Emirates" (should be Saudi-Arabia) | Pass through in staging. Fix in Gold. |
+| Duplicate row | `raw_fixtures_lineups` | fixture=1435971 appears twice (two pipeline runs 10 min apart on same day) | Dedup via QUALIFY in staging |
+| Round out of order | `raw_fixtures_rounds` | Round 10 appears after round 23 in array | Extract round number with REGEXP_SUBSTR for numeric sort |
+| String-typed stats | `raw_fixtures_statistics` | All stat values stored as VARCHAR (e.g. "66%", "12") — sorts alphabetically not numerically | Cast to INT/FLOAT in staging |
+
+### Duplication Check Results
+
+| Table | Total Rows | Unique Fixtures | Duplicates |
+|-------|-----------|-----------------|------------|
+| raw_fixtures_events | 189 | 189 | 0 ✅ |
+| raw_fixtures_lineups | 190 | 189 | 1 ⚠️ |
+| raw_fixtures_players | 189 | 189 | 0 ✅ |
+| raw_fixtures_statistics | 189 | 189 | 0 ✅ |
+| raw_predictions | 189 | 189 | 0 ✅ |
+
+### Referential Integrity Check
+Cross-join between raw_fixtures (team IDs) and raw_teams → **zero orphan records**. All teams in fixtures exist in teams table. All teams have played at least one match. ✅
+
+### Fixture Statistics — 18 Stat Types (Long Format)
+
+`raw_fixtures_statistics` stores one row per stat per team per fixture (long format). All 18 types appear exactly 376 times (189 fixtures × 2 teams):
+
+| Stat Type | Format | Cast Strategy |
+|-----------|--------|---------------|
+| Ball Possession | String with % | `REPLACE('%','')::FLOAT` |
+| Passes % | String with % | `REPLACE('%','')::FLOAT` |
+| expected_goals | Decimal string | `::FLOAT` |
+| goals_prevented | Decimal (can be negative) | `::FLOAT` |
+| Total Shots, Shots on Goal, Shots off Goal | Integer string | `::INT` |
+| Blocked Shots, Shots insidebox, Shots outsidebox | Integer string | `::INT` |
+| Corner Kicks, Offsides, Fouls | Integer string | `::INT` |
+| Yellow Cards, Red Cards | Integer string | `::INT` |
+| Goalkeeper Saves, Passes accurate, Total passes | Integer string | `::INT` |
+
+Staging will **PIVOT** this long format into wide format (1 row per team per fixture, 18 columns).
+
+### Leaderboard Tables — Identical Structure
+All 4 leaderboard tables (topscorers, topassists, topyellowcards, topredcards) share identical JSON structure. Will be combined into **one staging table** `stg_player_leaderboards` with a `ranking_type` column.
+
+---
+
+## Staging Layer Design
+
+### Philosophy
+- **Full fidelity** — extract every available column from source JSON
+- **No business logic** — pass values exactly as API returned them
+- **No value corrections** — known issues passed through, fixed in Gold
+- **Typed columns** — proper INT, FLOAT, VARCHAR, TIMESTAMP, BOOLEAN casts
+- **One row per logical entity** — one fixture, one player, one event per row
+- **Deduplicated** — always take latest `_loaded_at` for duplicate entity_keys
+- **Public dataset** — designed for external consumers, not just the AI agent
+
+### Deduplication Pattern (applied to ALL staging models)
+```sql
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY raw:entity_key::VARCHAR
+    ORDER BY _loaded_at DESC
+) = 1
+```
+
+### 15 Staging Tables
+
+| Staging Table | Source RAW Table(s) | Est. Rows | Transform Pattern |
+|---------------|---------------------|-----------|-------------------|
+| `stg_teams` | raw_teams | 18 | Simple FLATTEN |
+| `stg_team_standings` | raw_standings | 18 | Simple FLATTEN |
+| `stg_team_statistics` | raw_teams_statistics | 18 | Deep JSON nav (no FLATTEN) |
+| `stg_fixtures` | raw_fixtures | 306 | Simple FLATTEN |
+| `stg_rounds` | raw_fixtures_rounds | 34 | Array FLATTEN + round number extract |
+| `stg_match_events` | raw_fixtures_events | 3,090 | FLATTEN + dedup |
+| `stg_match_team_stats` | raw_fixtures_statistics | 376 | FLATTEN + PIVOT to wide + dedup |
+| `stg_match_player_stats` | raw_fixtures_players | 7,476 | Double FLATTEN + dedup |
+| `stg_lineup_players` | raw_fixtures_lineups | 7,514 | Double FLATTEN (startXI + subs) + dedup |
+| `stg_predictions` | raw_predictions | 189 | Deep JSON nav (no FLATTEN) |
+| `stg_player_season_stats` | raw_players | 666 | Double FLATTEN |
+| `stg_player_leaderboards` | raw_players_top* (4 tables) | 80 | FLATTEN + UNION ALL + ranking_type |
+| `stg_squad_players` | raw_players_squads | 558 | Double FLATTEN |
+| `stg_transfers` | raw_transfers | 2,573 | Simple FLATTEN |
+| `stg_injuries` | raw_injuries | 2 | Simple FLATTEN |
+
+### dbt Folder Structure (Domain-Grouped)
+```
+leagues_data/models/staging/
+├── teams/
+│   ├── stg_teams.sql
+│   ├── stg_team_standings.sql
+│   └── stg_team_statistics.sql
+├── fixtures/
+│   ├── stg_fixtures.sql
+│   ├── stg_rounds.sql
+│   ├── stg_match_events.sql
+│   ├── stg_match_team_stats.sql
+│   ├── stg_match_player_stats.sql
+│   ├── stg_lineup_players.sql
+│   └── stg_predictions.sql
+├── players/
+│   ├── stg_player_season_stats.sql
+│   ├── stg_player_leaderboards.sql
+│   └── stg_squad_players.sql
+└── transfers/
+    ├── stg_transfers.sql
+    └── stg_injuries.sql
+```
+
+### Key SQL Patterns
+
+**Pattern 1: Simple FLATTEN**
+```sql
+WITH source AS (
+    SELECT raw:payload:response AS arr, _loaded_at
+    FROM {{ source('raw', 'raw_teams') }}
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY raw:entity_key::VARCHAR ORDER BY _loaded_at DESC) = 1
+),
+flattened AS (
+    SELECT t.value:team:id::INT AS team_id, ...
+    FROM source, LATERAL FLATTEN(input => arr) t
+)
+SELECT * FROM flattened
+```
+
+**Pattern 2: Double FLATTEN (lineups — startXI + substitutes)**
+```sql
+LATERAL FLATTEN(input => raw:payload:response) team,
+LATERAL FLATTEN(input => ARRAY_CAT(team.value:startXI, team.value:substitutes)) player
+```
+
+**Pattern 3: PIVOT (match_team_stats — long → wide)**
+```sql
+SELECT
+    fixture_id, team_id, team_name,
+    MAX(CASE WHEN stat_type = 'Ball Possession'  THEN REPLACE(stat_value,'%','')::FLOAT END) AS ball_possession_pct,
+    MAX(CASE WHEN stat_type = 'Total Shots'      THEN stat_value::INT END) AS total_shots,
+    MAX(CASE WHEN stat_type = 'expected_goals'   THEN stat_value::FLOAT END) AS expected_goals,
+    -- ... 15 more stat columns
+GROUP BY fixture_id, team_id, team_name
+```
+
+**Pattern 4: UNION ALL (leaderboards — 4 tables → 1)**
+```sql
+(SELECT 'top_scorers'     AS ranking_type, ... FROM raw_players_topscorers ...)
+UNION ALL
+(SELECT 'top_assists'     AS ranking_type, ... FROM raw_players_topassists ...)
+UNION ALL
+(SELECT 'top_yellow_cards' AS ranking_type, ... FROM raw_players_topyellowcards ...)
+UNION ALL
+(SELECT 'top_red_cards'   AS ranking_type, ... FROM raw_players_topredcards ...)
+```
 
 ---
 
@@ -211,11 +345,11 @@ FILE_FORMAT = json_raw;
 
 ```
 src/pipeline/
-├── api_client.py    — HTTP client for API-Football
+├── api_client.py    — HTTP client for API-Football (retry, rate limiting)
 ├── config.py        — PipelineConfig (league_id, season, keys, etc.)
 ├── ingest.py        — Main ingestion logic (6 steps)
 ├── storage.py       — S3Writer (put_raw, put_marker, idempotency)
-└── run_daily.py     — CLI entrypoint: python run_daily.py --date 2026-02-15
+└── run_daily.py     — CLI entrypoint
 ```
 
 ### Ingestion Steps (ingest.py)
@@ -304,44 +438,22 @@ FROM raw_predictions;
 
 ---
 
-## What Needs To Be Done Next
+## Next Steps — Stage 3 Execution Plan
 
-### 1. Initialize dbt Project
-```bash
-pip install dbt-snowflake
-dbt init leagues_data
-```
-
-### 2. Define Sources (sources.yml)
-Point dbt at the 18 RAW tables.
-
-### 3. Build Staging Models (Silver Layer)
-Flatten each RAW table into clean, typed tables:
-```
-raw_fixtures         → stg_fixtures, stg_fixture_scores
-raw_players          → stg_players, stg_player_stats
-raw_teams            → stg_teams, stg_venues
-raw_standings        → stg_standings
-raw_transfers        → stg_transfers
-raw_fixtures_events  → stg_fixture_events
-raw_fixtures_players → stg_fixture_player_stats
-raw_predictions      → stg_predictions
-... etc (expect ~25-30 staging tables)
-```
-
-### 4. Build Marts (Gold Layer)
-Business-ready tables:
-```
-fct_matches          — match results with stats
-fct_player_performance — player ratings over time
-fct_transfers        — transfer analysis
-dim_teams            — team dimension
-dim_players          — player dimension
-dim_standings_history — standings progression
-```
-
-### 5. AI Coaching Agent
-Connect to Snowflake marts and enable natural language queries.
+| Step | Action | Priority |
+|------|--------|----------|
+| 1 | Verify dbt profiles.yml connects to Snowflake | HIGH |
+| 2 | Create sources.yml — point dbt at all 18 RAW tables | HIGH |
+| 3 | Build `stg_player_leaderboards` (UNION ALL pattern — simplest first) | HIGH |
+| 4 | Build `stg_teams` and `stg_team_standings` (Simple FLATTEN) | HIGH |
+| 5 | Build `stg_fixtures` (Simple FLATTEN — 306 rows) | HIGH |
+| 6 | Build `stg_match_events` (FLATTEN + dedup) | HIGH |
+| 7 | Build `stg_match_team_stats` (FLATTEN + PIVOT — most complex) | MEDIUM |
+| 8 | Build `stg_lineup_players` (Double FLATTEN + dedup) | MEDIUM |
+| 9 | Build `stg_match_player_stats` (Double FLATTEN + dedup) | MEDIUM |
+| 10 | Build remaining 6 staging models | MEDIUM |
+| 11 | Add dbt tests (not_null, unique, relationships) | MEDIUM |
+| 12 | Document all models in schema.yml | LOW |
 
 ---
 
@@ -362,7 +474,7 @@ WHERE league_id = 39   -- Premier League
 
 ### Run Pipeline
 ```bash
-python run_daily.py --date 2026-02-15
+python -m scripts.run_daily --date 2026-02-15
 ```
 
 ### Load New Data into Snowflake
@@ -376,10 +488,15 @@ dbt run
 
 ---
 
-## Important Notes
+## Important Notes & Gotchas
 
-- S3 credentials are used for Snowflake access (no IAM role)
-- The `state/` folder in S3 is for pipeline idempotency only, not loaded into Snowflake
-- Part numbers in filenames are a global counter per run, not per endpoint
-- Standings has 1 raw row but 18 teams nested inside
-- Season 2025 has 306 total fixtures, 58 finished as of Feb 15, 2026
+- S3 credentials are used for Snowflake access — no IAM role configured
+- The `state/` folder in S3 is for pipeline idempotency markers only — NOT loaded into Snowflake
+- Part numbers in S3 filenames are a GLOBAL counter per run, not per endpoint
+- `raw_standings` has 1 raw row but 18 teams nested inside — always FLATTEN before querying
+- Season 2025 has 306 total fixtures — 189 finished as of Feb 15, 2026. Grows as season progresses
+- All 4 leaderboard tables are identical in structure — combined into one staging table
+- Stat values in `raw_fixtures_statistics` are VARCHAR strings — must cast explicitly
+- **Snowflake QUALIFY + GROUP BY** — QUALIFY cannot be used in same SELECT as GROUP BY. Use subquery pattern instead
+- **Snowflake UNION ALL** — requires parentheses around each SELECT block when using ORDER BY + LIMIT per block
+- `raw_fixtures_lineups` has one extra row (190 vs 189) — accidental duplicate from double pipeline run, handled by dedup pattern

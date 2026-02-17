@@ -54,7 +54,7 @@ pytest tests/
 ```
 
 ## Transformation Layer
-The project includes a dbt project located in `leagues_data` for data transformation and quality testing.
+The project includes a dbt project located in `leagues_data_dbt` for data transformation and quality testing.
 
 ### Features
 - **Silver/Gold Modeling**: (Future scope) logic to normalize Bronze data into Silver/Gold layers.
@@ -64,7 +64,7 @@ The project includes a dbt project located in `leagues_data` for data transforma
 To run the dbt project:
 
 ```bash
-cd leagues_data
+cd leagues_data_dbt
 dbt deps
 dbt run
 ```
@@ -72,7 +72,7 @@ dbt run
 To run tests:
 
 ```bash
-cd leagues_data
+cd leagues_data_dbt
 dbt test
 ```
 
