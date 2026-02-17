@@ -1,0 +1,111 @@
+version: 2
+
+models:
+  - name: stg_teams
+    config:
+      materialized: table
+    description: >
+      Phase 1 contract scaffold for teams staging model.
+      Shared SQL contract for implementation phase: materialize as table, deduplicate by latest
+      raw:entity_key using _loaded_at, explicit casts only (no select *), and retain lineage
+      fields league_id, season, dt, run_id, _loaded_at.
+    columns:
+      - name: team_id
+        description: "Team identifier from API-Football."
+        data_tests:
+          - not_null
+      - name: league_id
+        description: "League identifier from source partition metadata."
+        data_tests:
+          - not_null
+      - name: season
+        description: "Season from source partition metadata."
+        data_tests:
+          - not_null
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "concat(cast(team_id as varchar), '|', cast(league_id as varchar), '|', cast(season as varchar))"
+
+  - name: stg_player_leaderboards
+    config:
+      materialized: table
+    description: >
+      Phase 1 contract scaffold for consolidated player leaderboard staging model.
+      Entity identity should be unique per league_id, season, ranking_type, player_id.
+      Rank is an ordering attribute and not part of the identity key.
+    columns:
+      - name: league_id
+        description: "League identifier from source partition metadata."
+        data_tests:
+          - not_null
+      - name: season
+        description: "Season from source partition metadata."
+        data_tests:
+          - not_null
+      - name: ranking_type
+        description: "Leaderboard family label."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["top_scorers", "top_assists", "top_yellow_cards", "top_red_cards"]
+      - name: player_id
+        description: "Player identifier from API-Football."
+        data_tests:
+          - not_null
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "concat(cast(league_id as varchar), '|', cast(season as varchar), '|', ranking_type, '|', cast(player_id as varchar))"
+
+  - name: stg_match_team_stats
+    config:
+      materialized: table
+    description: >
+      Phase 1 contract scaffold for team-level per-match statistics staging model.
+      Entity identity should be unique per fixture_id and team_id.
+    columns:
+      - name: fixture_id
+        description: "Fixture identifier."
+        data_tests:
+          - not_null
+      - name: team_id
+        description: "Team identifier."
+        data_tests:
+          - not_null
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "concat(cast(fixture_id as varchar), '|', cast(team_id as varchar))"
+
+  - name: stg_lineup_players
+    config:
+      materialized: table
+    description: >
+      Phase 1 contract scaffold for flattened lineup players model from startXI and substitutes.
+      Entity identity should be unique per fixture_id, team_id, player_id, lineup_bucket.
+    columns:
+      - name: fixture_id
+        description: "Fixture identifier."
+        data_tests:
+          - not_null
+      - name: team_id
+        description: "Team identifier."
+        data_tests:
+          - not_null
+      - name: player_id
+        description: "Player identifier."
+        data_tests:
+          - not_null
+      - name: lineup_bucket
+        description: "Lineup origin bucket."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["start_xi", "substitutes"]
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "concat(cast(fixture_id as varchar), '|', cast(team_id as varchar), '|', cast(player_id as varchar), '|', lineup_bucket)"
