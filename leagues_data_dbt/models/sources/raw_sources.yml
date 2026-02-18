@@ -1,0 +1,22 @@
+version: 2
+
+sources:
+  - name: raw
+    description: "Raw API-Football JSON payload tables loaded from Snowflake COPY INTO."
+    database: LEAGUES_DATA
+    schema: RAW
+    tables:
+      - name: raw_teams
+        description: "Raw /teams endpoint payloads."
+      - name: raw_players_topscorers
+        description: "Raw /players/topscorers endpoint payloads."
+      - name: raw_players_topassists
+        description: "Raw /players/topassists endpoint payloads."
+      - name: raw_players_topyellowcards
+        description: "Raw /players/topyellowcards endpoint payloads."
+      - name: raw_players_topredcards
+        description: "Raw /players/topredcards endpoint payloads."
+      - name: raw_fixtures_statistics
+        description: "Raw /fixtures/statistics endpoint payloads."
+      - name: raw_fixtures_lineups
+        description: "Raw /fixtures/lineups endpoint payloads."

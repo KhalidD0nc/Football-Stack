@@ -1,0 +1,13 @@
+leagues_data_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: DVXIDXD-VA08152
+      user: KHALID
+      role: ACCOUNTADMIN
+      warehouse: COMPUTE_WH
+      database: LEAGUES_DATA
+      schema: DEV
+      threads: 4
+      private_key_path: /Users/khalidr/rsa_key.pem

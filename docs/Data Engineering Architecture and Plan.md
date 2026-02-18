@@ -26,7 +26,7 @@ Update rule for every stage transition:
 
 ## Architecture (Current + Next)
 
-### Current Stage: Stage 2 - Bronze Expansion for Club + Player Data (Non-Production Complete)
+### Stage 2 - Bronze Expansion for Club + Player Data (Completed)
 Goal:
 - Capture enough SPL + Al Hilal Bronze data for exploration and downstream model design.
 
@@ -55,25 +55,37 @@ Exit criteria:
 - Run summaries confirm successful endpoint coverage with no critical failures.
 - Reruns remain idempotent via state markers.
 
-### Next Stage: Stage 3 - Silver Modeling and Normalization
+### Current Stage: Stage 3 - Silver Modeling and Normalization (In Progress)
 Goal:
 - Transform Bronze payloads into normalized, queryable Silver entities.
 
 Architecture focus:
 - Keep Bronze immutable and append-only.
 - Build deterministic normalization jobs into shared entities/facts.
-- Introduce key quality checks on normalized tables.
+- Introduce key quality checks on normalized tables (Schema contracts).
 
-Next-stage core Silver entities:
-- `dim_team`, `dim_player`, `dim_fixture`
-- `fact_team_match`, `fact_player_match`
-- `fact_match_events`, `fact_lineups`
-- `fact_injuries`, `fact_transfers`
+Current Silver entities (Staging):
+- `stg_teams`, `stg_player_leaderboards`
+- `stg_match_team_stats`, `stg_lineup_players`
+- (Planned) `dim_team`, `dim_player`, `dim_fixture`, `fact_*`
 
 Exit criteria:
 - Silver entities load deterministically from Bronze.
 - Referential integrity and duplicate checks pass.
 - Silver outputs support first Gold mart definitions.
+
+### Next Stage: Stage 4 - Gold Marts and Analytics
+Goal:
+- Build curated, business-level entities for analytics and downstream applications.
+
+Architecture focus:
+- Aggregate Silver facts into performance metrics.
+- Implement specialized marts (e.g., Playing Styles, Player Comparison).
+- Finalize automated quality and freshness reporting.
+
+Exit criteria:
+- Gold models provide stable interfaces for the AI Coaching System.
+- Data lineage is fully documented and verifiable.
 
 ## Implementation Tracking
 Implementation checklists, with explicit `Why` and `Goals` for each stage, are in:

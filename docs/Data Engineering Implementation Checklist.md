@@ -16,7 +16,7 @@ On each stage transition:
 - `docs/Data Engineering Implementation Checklist.md`
 - `README.md`
 
-## Current Stage: Stage 2 - Bronze Expansion for Club + Player Data (Non-Production Complete)
+## Stage 2 - Bronze Expansion for Club + Player Data (Completed)
 ### Why
 - Stage 2 is required to support FBref-like outputs and AI coaching data needs.
 - Thin-slice endpoints alone are not enough for club intelligence and player intelligence coverage.
@@ -49,7 +49,7 @@ On each stage transition:
   - `raw_files=114`
   - `skipped_idempotent=0`
 
-## Next Stage: Stage 3 - Silver Modeling and Normalization
+## Current Stage: Stage 3 - Silver Modeling and Normalization (In Progress)
 ### Why
 - Bronze data is now sufficient for exploration, but not convenient for analytics or website serving.
 - Silver creates stable, normalized entities and facts for consistent downstream use.
@@ -60,9 +60,28 @@ On each stage transition:
 - Add Silver-level quality checks.
 
 ### Checklist
-- [ ] Define Silver schema contracts (`dim_team`, `dim_player`, `dim_fixture`, `fact_*` tables).
-- [ ] Implement Bronze-to-Silver normalization transforms.
-- [ ] Enforce primary/business key uniqueness and dedup logic.
+- [x] Define Silver schema contracts (`stg_teams`, `stg_player_leaderboards`, `stg_match_team_stats`, `stg_lineup_players`).
+- [x] Implement Bronze-to-Silver normalization transforms (Staging models).
+- [x] Enforce primary/business key uniqueness and dedup logic (dbt tests).
+- [ ] Implement core dimension tables (`dim_team`, `dim_player`, `dim_fixture`).
+- [ ] Implement core fact tables (`fact_team_match`, `fact_player_match`).
 - [ ] Validate referential integrity across fixture/team/player keys.
-- [ ] Add freshness, null-key, and duplicate checks for Silver outputs.
+- [ ] Add freshness and null-key checks for all Silver outputs.
 - [ ] Publish initial Silver run summary and sample row counts.
+
+## Next Stage: Stage 4 - Gold Marts and Analytics
+### Why
+- Silver entities are normalized but require complex joins for business questions.
+- Gold marts provide user-ready data for the AI Coaching System and front-end displays.
+
+### Goals
+- Aggregate Silver facts into performance-oriented marts.
+- Implement business-focused KPIs (e.g., xG contribution, player form trends).
+- Ensure data is optimized for high-performance retrieval.
+
+### Checklist
+- [ ] Define Gold schema for Team Performance Mart.
+- [ ] Define Gold schema for Player Scouting Mart.
+- [ ] Implement aggregation logic for seasonal and rolling stats.
+- [ ] Add business-logic validation tests.
+- [ ] Create documentation for downstream consumers.

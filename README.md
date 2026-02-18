@@ -1,7 +1,7 @@
 # Leagues Data Project
 
 ## Scope
-This repository is for **Data Engineering only**.
+This repository is for **Data Engineering only**. It focuses on the automated ingestion, storage, and transformation of football data (SPL/API-Football) into a queryable data lake.
 
 ## Stage Tracker
 We keep only two active stage labels:
@@ -17,67 +17,88 @@ Transition rule (must be followed every stage):
    - `docs/Data Engineering Implementation Checklist.md`
 
 ## Current Stage
-**Stage 2 - Bronze Expansion for Club + Player Data (Completed)**
-- Bronze endpoint expansion implemented for league baseline + team deep details
-- Non-production run evidence captured in checklist document
-- Bronze data collection is sufficient for exploration/design work
+**Stage 3 - Silver Modeling and Normalization (In Progress)**
+- Transform Bronze payloads into normalized, queryable Silver entities using dbt.
+- Standardize keys (team_id, player_id, fixture_id) across all models.
+- Implement staging layer for fixtures, teams, players, and statistics.
+- Enforce schema contracts and data quality checks (uniqueness, referential integrity).
 
 ## Next Stage
-**Stage 3 - Silver Modeling and Normalization**
-- Define and implement normalized Silver entities/facts from Bronze payloads
-- Add Silver-level data quality checks
-- Prepare Silver outputs for first Gold mart design
+**Stage 4 - Gold Marts and Analytics**
+- Build curated Gold-layer models for downstream consumers (e.g., Team Performance, Player Form).
+- Implement advanced business logic and KPI calculations.
+- Finalize data freshness and observability dashboards.
 
 ## Features
+
+### Ingestion (Bronze Layer)
+- **Coverage**: Full league baseline (fixtures, teams, standings, rounds) and deep details (statistics, events, lineups, players, predictions, injuries, transfers).
 - **Idempotency**: All ingestion steps use S3 marker files to prevent duplicate API calls and ensure safe re-runs.
-- **Resilience**: The API client includes exponential backoff retry logic and rate limiting to handle transient failures gracefully.
-- **Observability**: Detailed run summary metrics (API calls, failures, writes) are logged at the end of each ingestion run.
+- **Resilience**: API client includes exponential backoff retry logic and rate limiting.
+- **Paginated Ingestion**: Optimized handling for large datasets like league-wide player lists.
+
+### Transformation (Silver Layer)
+- **dbt Integration**: Modern transformation workflow with version-controlled SQL.
+- **Schema Contracts**: explicit casts and column documentation for all staging models.
+- **Data Quality**: Automated dbt tests for `not_null`, `unique`, and `accepted_values`.
+- **Deduplication**: Intelligent handling of raw partition overlaps to ensure a consistent Silver state.
+
+## Environment Setup
+
+1. **Python Environment**: Initialize a virtual environment and install dependencies.
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+2. **Configuration**: Copy the example environment file and fill in your credentials (API-Football key, AWS credentials for S3).
+   ```bash
+   cp .env.example .env
+   ```
 
 ## Quick Start
+
+### Python Ingestion
 To run the daily ingestion script:
 
 ```bash
 python -m scripts.run_daily
 ```
 
-By default, this will run for the current date. You can also specify a date:
+By default, this will run for the current date. You can also specify a specific date:
 
 ```bash
-python -m scripts.run_daily
+python -m scripts.run_daily --date 2026-02-15
 ```
 
-## Testing
-To run the project's test suite:
-
-```bash
-pytest tests/
-```
-
-## Transformation Layer
-The project includes a dbt project located in `leagues_data_dbt` for data transformation and quality testing.
-
-### Features
-- **Silver/Gold Modeling**: (Future scope) logic to normalize Bronze data into Silver/Gold layers.
-- **Data Quality**: dbt tests ensure data integrity and schema compliance.
-
-### Quick Start
-To run the dbt project:
+### dbt Transformations
+The dbt project is located in `leagues_data_dbt`.
 
 ```bash
 cd leagues_data_dbt
-dbt deps
-dbt run
+dbt deps      # Install dependencies
+dbt build     # Run models and tests
 ```
 
-To run tests:
-
+To view documentation:
 ```bash
-cd leagues_data_dbt
-dbt test
+dbt docs generate
+dbt docs serve
 ```
+
+## Project Structure
+- `src/pipeline/`: Core ingestion logic (API client, storage, orchestration).
+- `leagues_data_dbt/`: dbt project for SQL transformations.
+- `scripts/`: Operational scripts and entry points.
+- `docs/`: Strategic architecture and implementation tracking.
+- `tests/`: Unit and integration tests for the Python pipeline.
 
 ## Primary Documents
 Architecture plan:
 - `docs/Data Engineering Architecture and Plan.md`
-Implementation checklist (with `Why` and `Goals` per stage):
+Implementation checklist:
 - `docs/Data Engineering Implementation Checklist.md`
+Project Context:
+- `docs/Project_Context.md`
+
