@@ -48,6 +48,21 @@ API-Football (v3) → Python ETL → S3 (raw JSON) → Snowflake (COPY INTO) →
 - Domain-grouped folder structure: teams/, fixtures/, players/, transfers/
 - Full column extraction — public dataset philosophy (keep everything)
 
+### ✅ LATEST IMPLEMENTATION UPDATE (February 18, 2026)
+
+- **Phase 1 (foundation) complete**
+  - Added dbt source definitions: `models/sources/raw_sources.yml`
+  - Added staging contracts/tests: `models/staging/staging_schema.yml`
+- **Phase 2 complete**
+  - Implemented: `stg_teams`, `stg_player_leaderboards`
+- **Phase 3 implemented**
+  - Implemented: `stg_match_team_stats`, `stg_lineup_players`
+  - Both models use dedup by latest `raw:entity_key` + `_loaded_at`, explicit casts, and lineage columns.
+- **Critical fixture key fix applied**
+  - For `raw_fixtures_statistics` and `raw_fixtures_lineups`, `fixture_id` is extracted from:
+    - `raw:params:fixture::INT`
+  - Reason: these endpoint response rows do not reliably include `fixture.id` inside each `payload.response` object.
+
 ### ⬜ TODO — Gold Layer (dbt Marts)
 
 - Fact and dimension tables for analytics
@@ -317,6 +332,12 @@ LATERAL FLATTEN(input => raw:payload:response) team,
 LATERAL FLATTEN(input => ARRAY_CAT(team.value:startXI, team.value:substitutes)) player
 ```
 
+**Pattern 2a: Fixture ID extraction for fixture-level endpoints**
+```sql
+raw:params:fixture::INT AS fixture_id
+```
+Use this for `/fixtures/statistics` and `/fixtures/lineups` staging models.
+
 **Pattern 3: PIVOT (match_team_stats — long → wide)**
 ```sql
 SELECT
@@ -442,18 +463,12 @@ FROM raw_predictions;
 
 | Step | Action | Priority |
 |------|--------|----------|
-| 1 | Verify dbt profiles.yml connects to Snowflake | HIGH |
-| 2 | Create sources.yml — point dbt at all 18 RAW tables | HIGH |
-| 3 | Build `stg_player_leaderboards` (UNION ALL pattern — simplest first) | HIGH |
-| 4 | Build `stg_teams` and `stg_team_standings` (Simple FLATTEN) | HIGH |
-| 5 | Build `stg_fixtures` (Simple FLATTEN — 306 rows) | HIGH |
-| 6 | Build `stg_match_events` (FLATTEN + dedup) | HIGH |
-| 7 | Build `stg_match_team_stats` (FLATTEN + PIVOT — most complex) | MEDIUM |
-| 8 | Build `stg_lineup_players` (Double FLATTEN + dedup) | MEDIUM |
-| 9 | Build `stg_match_player_stats` (Double FLATTEN + dedup) | MEDIUM |
-| 10 | Build remaining 6 staging models | MEDIUM |
-| 11 | Add dbt tests (not_null, unique, relationships) | MEDIUM |
-| 12 | Document all models in schema.yml | LOW |
+| 1 | Verify dbt profiles.yml database/schema target (`LEAGUES_DATA`, intended model schema) | HIGH |
+| 2 | Build and validate next fixture models: `stg_match_player_stats`, `stg_match_events` | HIGH |
+| 3 | Build and validate team context models: `stg_team_standings`, `stg_team_statistics` | HIGH |
+| 4 | Build and validate remaining staging models (`stg_fixtures`, `stg_rounds`, `stg_predictions`, `stg_player_season_stats`, `stg_squad_players`, `stg_transfers`, `stg_injuries`) | MEDIUM |
+| 5 | Expand schema documentation/tests to full staging layer | MEDIUM |
+| 6 | Capture Stage 3 completion evidence (row counts, key integrity, freshness checks) | MEDIUM |
 
 ---
 

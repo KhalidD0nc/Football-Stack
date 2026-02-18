@@ -23,6 +23,19 @@ Transition rule (must be followed every stage):
 - Implement staging layer for fixtures, teams, players, and statistics.
 - Enforce schema contracts and data quality checks (uniqueness, referential integrity).
 
+### Stage 3 Progress (Latest)
+- Phase 1 foundations completed:
+  - dbt source definitions added in `/Users/khalidr/Desktop/Leagues_Data_Project/leagues_data_dbt/models/sources/raw_sources.yml`
+  - staging contracts/tests scaffolded in `/Users/khalidr/Desktop/Leagues_Data_Project/leagues_data_dbt/models/staging/staging_schema.yml`
+- Phase 2 models implemented and validated:
+  - `stg_teams`
+  - `stg_player_leaderboards`
+- Phase 3 models implemented:
+  - `stg_match_team_stats`
+  - `stg_lineup_players`
+- Key parsing fix applied for fixture-level endpoints:
+  - For `/fixtures/statistics` and `/fixtures/lineups`, `fixture_id` is extracted from `raw:params:fixture` (not from `payload.response`).
+
 ## Next Stage
 **Stage 4 - Gold Marts and Analytics**
 - Build curated Gold-layer models for downstream consumers (e.g., Team Performance, Player Form).
@@ -81,6 +94,12 @@ dbt deps      # Install dependencies
 dbt build     # Run models and tests
 ```
 
+Targeted builds used for current staging rollout:
+```bash
+dbt build -s stg_teams stg_player_leaderboards
+dbt build -s stg_match_team_stats stg_lineup_players
+```
+
 To view documentation:
 ```bash
 dbt docs generate
@@ -101,4 +120,3 @@ Implementation checklist:
 - `docs/Data Engineering Implementation Checklist.md`
 Project Context:
 - `docs/Project_Context.md`
-
