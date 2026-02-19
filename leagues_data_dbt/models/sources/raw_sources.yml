@@ -6,8 +6,16 @@ sources:
     database: LEAGUES_DATA
     schema: RAW
     tables:
+      - name: raw_fixtures
+        description: "Raw /fixtures endpoint payloads."
       - name: raw_teams
         description: "Raw /teams endpoint payloads."
+      - name: raw_standings
+        description: "Raw /standings endpoint payloads."
+      - name: raw_fixtures_rounds
+        description: "Raw /fixtures/rounds endpoint payloads."
+      - name: raw_players
+        description: "Raw /players endpoint payloads."
       - name: raw_players_topscorers
         description: "Raw /players/topscorers endpoint payloads."
       - name: raw_players_topassists
@@ -16,7 +24,21 @@ sources:
         description: "Raw /players/topyellowcards endpoint payloads."
       - name: raw_players_topredcards
         description: "Raw /players/topredcards endpoint payloads."
+      - name: raw_teams_statistics
+        description: "Raw /teams/statistics endpoint payloads."
+      - name: raw_injuries
+        description: "Raw /injuries endpoint payloads."
+      - name: raw_transfers
+        description: "Raw /transfers endpoint payloads."
+      - name: raw_players_squads
+        description: "Raw /players/squads endpoint payloads."
       - name: raw_fixtures_statistics
         description: "Raw /fixtures/statistics endpoint payloads."
+      - name: raw_fixtures_events
+        description: "Raw /fixtures/events endpoint payloads."
       - name: raw_fixtures_lineups
         description: "Raw /fixtures/lineups endpoint payloads."
+      - name: raw_fixtures_players
+        description: "Raw /fixtures/players endpoint payloads."
+      - name: raw_predictions
+        description: "Raw /predictions endpoint payloads."

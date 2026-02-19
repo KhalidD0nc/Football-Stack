@@ -27,14 +27,14 @@ Transition rule (must be followed every stage):
 - Phase 1 foundations completed:
   - dbt source definitions added in `/Users/khalidr/Desktop/Leagues_Data_Project/leagues_data_dbt/models/sources/raw_sources.yml`
   - staging contracts/tests scaffolded in `/Users/khalidr/Desktop/Leagues_Data_Project/leagues_data_dbt/models/staging/staging_schema.yml`
-- Phase 2 models implemented and validated:
-  - `stg_teams`
-  - `stg_player_leaderboards`
-- Phase 3 models implemented:
-  - `stg_match_team_stats`
-  - `stg_lineup_players`
+- Stage 3 model implementation complete (15 staging models):
+  - Teams: `stg_teams`, `stg_team_standings`, `stg_team_statistics`
+  - Fixtures: `stg_fixtures`, `stg_rounds`, `stg_match_events`, `stg_match_team_stats`, `stg_match_player_stats`, `stg_lineup_players`, `stg_predictions`
+  - Players: `stg_player_season_stats`, `stg_player_leaderboards`, `stg_squad_players`
+  - Transfers/availability: `stg_transfers`, `stg_injuries`
 - Key parsing fix applied for fixture-level endpoints:
   - For `/fixtures/statistics` and `/fixtures/lineups`, `fixture_id` is extracted from `raw:params:fixture` (not from `payload.response`).
+- Current focus: Stage 3 hardening (full build stability, quality evidence, and stage-transition docs).
 
 ## Next Stage
 **Stage 4 - Gold Marts and Analytics**
@@ -98,6 +98,10 @@ Targeted builds used for current staging rollout:
 ```bash
 dbt build -s stg_teams stg_player_leaderboards
 dbt build -s stg_match_team_stats stg_lineup_players
+dbt build -s stg_fixtures stg_rounds stg_match_events
+dbt build -s stg_match_player_stats stg_predictions
+dbt build -s stg_team_standings stg_team_statistics stg_player_season_stats stg_squad_players stg_transfers stg_injuries
+dbt build -s staging
 ```
 
 To view documentation:

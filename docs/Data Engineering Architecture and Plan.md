@@ -65,14 +65,19 @@ Architecture focus:
 - Introduce key quality checks on normalized tables (Schema contracts).
 
 Current Silver entities (Staging):
-- `stg_teams`, `stg_player_leaderboards`
-- `stg_match_team_stats`, `stg_lineup_players`
-- (Planned) `dim_team`, `dim_player`, `dim_fixture`, `fact_*`
+- Teams:
+  - `stg_teams`, `stg_team_standings`, `stg_team_statistics`
+- Fixtures:
+  - `stg_fixtures`, `stg_rounds`, `stg_match_events`, `stg_match_team_stats`, `stg_match_player_stats`, `stg_lineup_players`, `stg_predictions`
+- Players:
+  - `stg_player_season_stats`, `stg_player_leaderboards`, `stg_squad_players`
+- Transfers/availability:
+  - `stg_transfers`, `stg_injuries`
 
 Exit criteria:
-- Silver entities load deterministically from Bronze.
-- Referential integrity and duplicate checks pass.
-- Silver outputs support first Gold mart definitions.
+- All 15 staging entities load deterministically from Bronze.
+- Staging quality checks pass (null keys, uniqueness, accepted values, key relationships).
+- Stage 3 evidence pack is published (row counts, duplicate checks, freshness snapshot).
 
 ### Next Stage: Stage 4 - Gold Marts and Analytics
 Goal:

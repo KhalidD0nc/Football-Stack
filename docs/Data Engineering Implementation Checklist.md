@@ -60,14 +60,15 @@ On each stage transition:
 - Add Silver-level quality checks.
 
 ### Checklist
-- [x] Define Silver schema contracts (`stg_teams`, `stg_player_leaderboards`, `stg_match_team_stats`, `stg_lineup_players`).
-- [x] Implement Bronze-to-Silver normalization transforms (Staging models).
-- [x] Enforce primary/business key uniqueness and dedup logic (dbt tests).
-- [ ] Implement core dimension tables (`dim_team`, `dim_player`, `dim_fixture`).
-- [ ] Implement core fact tables (`fact_team_match`, `fact_player_match`).
-- [ ] Validate referential integrity across fixture/team/player keys.
-- [ ] Add freshness and null-key checks for all Silver outputs.
-- [ ] Publish initial Silver run summary and sample row counts.
+- [x] Define Silver schema contracts (sources + staging schema tests).
+- [x] Implement fixture core staging models (`stg_fixtures`, `stg_rounds`, `stg_match_events`).
+- [x] Implement fixture deep models (`stg_match_player_stats`, `stg_predictions`).
+- [x] Implement team/player/availability staging models (`stg_team_standings`, `stg_team_statistics`, `stg_player_season_stats`, `stg_squad_players`, `stg_transfers`, `stg_injuries`).
+- [x] Implement and validate earlier models (`stg_teams`, `stg_player_leaderboards`, `stg_match_team_stats`, `stg_lineup_players`) including fixture_id extraction fix for fixture-level endpoints.
+- [x] Expand raw source coverage to all 18 RAW tables.
+- [ ] Run full Stage 3 hardening build (`dbt build -s staging`) and resolve residual quality issues.
+- [ ] Publish Stage 3 evidence pack (row counts, duplicate checks, null-key profile, freshness snapshot).
+- [ ] Confirm stage transition readiness and move Stage 4 to Current Stage.
 
 ## Next Stage: Stage 4 - Gold Marts and Analytics
 ### Why

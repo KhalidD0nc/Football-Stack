@@ -56,8 +56,11 @@ API-Football (v3) → Python ETL → S3 (raw JSON) → Snowflake (COPY INTO) →
 - **Phase 2 complete**
   - Implemented: `stg_teams`, `stg_player_leaderboards`
 - **Phase 3 implemented**
-  - Implemented: `stg_match_team_stats`, `stg_lineup_players`
-  - Both models use dedup by latest `raw:entity_key` + `_loaded_at`, explicit casts, and lineage columns.
+  - Implemented fixture core: `stg_fixtures`, `stg_rounds`, `stg_match_events`
+  - Implemented fixture deep: `stg_match_player_stats`, `stg_predictions`
+  - Implemented team/player/availability: `stg_team_standings`, `stg_team_statistics`, `stg_player_season_stats`, `stg_squad_players`, `stg_transfers`, `stg_injuries`
+  - Existing implemented models retained: `stg_teams`, `stg_player_leaderboards`, `stg_match_team_stats`, `stg_lineup_players`
+  - All staging models use dedup by latest `raw:entity_key` + `_loaded_at`, explicit casts, and lineage columns.
 - **Critical fixture key fix applied**
   - For `raw_fixtures_statistics` and `raw_fixtures_lineups`, `fixture_id` is extracted from:
     - `raw:params:fixture::INT`
@@ -463,12 +466,11 @@ FROM raw_predictions;
 
 | Step | Action | Priority |
 |------|--------|----------|
-| 1 | Verify dbt profiles.yml database/schema target (`LEAGUES_DATA`, intended model schema) | HIGH |
-| 2 | Build and validate next fixture models: `stg_match_player_stats`, `stg_match_events` | HIGH |
-| 3 | Build and validate team context models: `stg_team_standings`, `stg_team_statistics` | HIGH |
-| 4 | Build and validate remaining staging models (`stg_fixtures`, `stg_rounds`, `stg_predictions`, `stg_player_season_stats`, `stg_squad_players`, `stg_transfers`, `stg_injuries`) | MEDIUM |
-| 5 | Expand schema documentation/tests to full staging layer | MEDIUM |
-| 6 | Capture Stage 3 completion evidence (row counts, key integrity, freshness checks) | MEDIUM |
+| 1 | Run full staging build and tests: `dbt build -s staging` | HIGH |
+| 2 | Resolve any remaining model-level data quality failures (null keys, uniqueness, accepted values) | HIGH |
+| 3 | Capture Stage 3 evidence pack (row counts, duplicate checks, freshness snapshot) | HIGH |
+| 4 | Validate schema target configuration in dbt profile/macro (`DEV`, `staging`, `DEV_STAGING`) | MEDIUM |
+| 5 | Update governance docs and move Stage 4 to Current Stage once Stage 3 evidence is complete | MEDIUM |
 
 ---
 

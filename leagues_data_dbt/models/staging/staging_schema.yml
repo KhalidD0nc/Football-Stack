@@ -4,22 +4,15 @@ models:
   - name: stg_teams
     config:
       materialized: table
-    description: >
-      Phase 1 contract scaffold for teams staging model.
-      Shared SQL contract for implementation phase: materialize as table, deduplicate by latest
-      raw:entity_key using _loaded_at, explicit casts only (no select *), and retain lineage
-      fields league_id, season, dt, run_id, _loaded_at.
+    description: "Staging teams model from raw /teams payloads."
     columns:
       - name: team_id
-        description: "Team identifier from API-Football."
         data_tests:
           - not_null
       - name: league_id
-        description: "League identifier from source partition metadata."
         data_tests:
           - not_null
       - name: season
-        description: "Season from source partition metadata."
         data_tests:
           - not_null
     data_tests:
@@ -30,28 +23,21 @@ models:
   - name: stg_player_leaderboards
     config:
       materialized: table
-    description: >
-      Phase 1 contract scaffold for consolidated player leaderboard staging model.
-      Entity identity should be unique per league_id, season, ranking_type, player_id.
-      Rank is an ordering attribute and not part of the identity key.
+    description: "Consolidated top scorers/assists/cards leaderboards."
     columns:
       - name: league_id
-        description: "League identifier from source partition metadata."
         data_tests:
           - not_null
       - name: season
-        description: "Season from source partition metadata."
         data_tests:
           - not_null
       - name: ranking_type
-        description: "Leaderboard family label."
         data_tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ["top_scorers", "top_assists", "top_yellow_cards", "top_red_cards"]
       - name: player_id
-        description: "Player identifier from API-Football."
         data_tests:
           - not_null
     data_tests:
@@ -62,16 +48,12 @@ models:
   - name: stg_match_team_stats
     config:
       materialized: table
-    description: >
-      Phase 1 contract scaffold for team-level per-match statistics staging model.
-      Entity identity should be unique per fixture_id and team_id.
+    description: "Team-level per-fixture statistics pivoted from long stat rows."
     columns:
       - name: fixture_id
-        description: "Fixture identifier."
         data_tests:
           - not_null
       - name: team_id
-        description: "Team identifier."
         data_tests:
           - not_null
     data_tests:
@@ -82,24 +64,18 @@ models:
   - name: stg_lineup_players
     config:
       materialized: table
-    description: >
-      Phase 1 contract scaffold for flattened lineup players model from startXI and substitutes.
-      Entity identity should be unique per fixture_id, team_id, player_id, lineup_bucket.
+    description: "Flattened lineup players across start_xi and substitutes."
     columns:
       - name: fixture_id
-        description: "Fixture identifier."
         data_tests:
           - not_null
       - name: team_id
-        description: "Team identifier."
         data_tests:
           - not_null
       - name: player_id
-        description: "Player identifier."
         data_tests:
           - not_null
       - name: lineup_bucket
-        description: "Lineup origin bucket."
         data_tests:
           - not_null
           - accepted_values:
@@ -109,3 +85,212 @@ models:
       - unique:
           arguments:
             column_name: "concat(cast(fixture_id as varchar), '|', cast(team_id as varchar), '|', cast(player_id as varchar), '|', lineup_bucket)"
+
+  - name: stg_fixtures
+    config:
+      materialized: table
+    description: "Fixture backbone model with teams, score, and status context."
+    columns:
+      - name: fixture_id
+        data_tests:
+          - not_null
+      - name: league_id
+        data_tests:
+          - not_null
+      - name: season
+        data_tests:
+          - not_null
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "cast(fixture_id as varchar)"
+
+  - name: stg_rounds
+    config:
+      materialized: table
+    description: "League rounds extracted from /fixtures/rounds."
+    columns:
+      - name: round_name
+        data_tests:
+          - not_null
+      - name: round_number
+        data_tests:
+          - not_null
+      - name: league_id
+        data_tests:
+          - not_null
+      - name: season
+        data_tests:
+          - not_null
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "concat(cast(league_id as varchar), '|', cast(season as varchar), '|', round_name)"
+
+  - name: stg_match_events
+    config:
+      materialized: table
+    description: "Match event timeline rows from /fixtures/events."
+    columns:
+      - name: fixture_id
+        data_tests:
+          - not_null
+      - name: event_sequence
+        data_tests:
+          - not_null
+      - name: team_id
+        data_tests:
+          - not_null
+      - name: event_type
+        data_tests:
+          - not_null
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "concat(cast(fixture_id as varchar), '|', cast(event_sequence as varchar))"
+
+  - name: stg_match_player_stats
+    config:
+      materialized: table
+    description: "Per-player per-match performance from /fixtures/players."
+    columns:
+      - name: fixture_id
+        data_tests:
+          - not_null
+      - name: team_id
+        data_tests:
+          - not_null
+      - name: player_id
+        data_tests:
+          - not_null
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "concat(cast(fixture_id as varchar), '|', cast(team_id as varchar), '|', cast(player_id as varchar))"
+
+  - name: stg_predictions
+    config:
+      materialized: table
+    description: "Pre-match predictions for each fixture."
+    columns:
+      - name: fixture_id
+        data_tests:
+          - not_null
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "cast(fixture_id as varchar)"
+
+  - name: stg_team_standings
+    config:
+      materialized: table
+    description: "League standings rows per team."
+    columns:
+      - name: standing_rank
+        data_tests:
+          - not_null
+      - name: team_id
+        data_tests:
+          - not_null
+      - name: league_id
+        data_tests:
+          - not_null
+      - name: season
+        data_tests:
+          - not_null
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "concat(cast(team_id as varchar), '|', cast(league_id as varchar), '|', cast(season as varchar))"
+
+  - name: stg_team_statistics
+    config:
+      materialized: table
+    description: "Team aggregate statistics for the season."
+    columns:
+      - name: team_id
+        data_tests:
+          - not_null
+      - name: league_id
+        data_tests:
+          - not_null
+      - name: season
+        data_tests:
+          - not_null
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "concat(cast(team_id as varchar), '|', cast(league_id as varchar), '|', cast(season as varchar))"
+
+  - name: stg_player_season_stats
+    config:
+      materialized: table
+    description: "Player season-level statistics from paginated /players data."
+    columns:
+      - name: player_id
+        data_tests:
+          - not_null
+      - name: team_id
+        data_tests:
+          - not_null
+      - name: stats_season
+        data_tests:
+          - not_null
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "concat(cast(player_id as varchar), '|', cast(team_id as varchar), '|', cast(stats_season as varchar))"
+
+  - name: stg_squad_players
+    config:
+      materialized: table
+    description: "Current squad list by team from /players/squads."
+    columns:
+      - name: team_id
+        data_tests:
+          - not_null
+      - name: player_id
+        data_tests:
+          - not_null
+      - name: league_id
+        data_tests:
+          - not_null
+      - name: season
+        data_tests:
+          - not_null
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "concat(cast(team_id as varchar), '|', cast(player_id as varchar), '|', cast(league_id as varchar), '|', cast(season as varchar))"
+
+  - name: stg_transfers
+    config:
+      materialized: table
+    description: "Transfer history rows extracted from /transfers."
+    columns:
+      - name: player_id
+        data_tests:
+          - not_null
+      - name: transfer_date
+        data_tests:
+          - not_null
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "concat(cast(player_id as varchar), '|', cast(transfer_date as varchar), '|', coalesce(cast(from_team_id as varchar), 'na'), '|', coalesce(cast(to_team_id as varchar), 'na'), '|', coalesce(transfer_type, 'na'))"
+
+  - name: stg_injuries
+    config:
+      materialized: table
+    description: "Injury records from /injuries endpoint."
+    columns:
+      - name: player_id
+        data_tests:
+          - not_null
+      - name: team_id
+        data_tests:
+          - not_null
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "concat(cast(player_id as varchar), '|', coalesce(cast(fixture_id as varchar), 'na'), '|', cast(league_id as varchar), '|', cast(season as varchar), '|', coalesce(injury_type, injury_reason, 'na'))"
