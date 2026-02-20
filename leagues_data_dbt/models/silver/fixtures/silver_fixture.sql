@@ -1,0 +1,47 @@
+{{config(materialized='table')}}
+WITH fixtures AS (
+    SELECT * FROM {{ ref('stg_fixtures') }}
+)
+
+SELECT
+    fixture_id,
+    referee,
+    fixture_timezone,
+    fixture_date,
+    fixture_timestamp,
+    period_first,
+    period_second,
+    venue_id,
+    venue_name,
+    venue_city,
+    status_long,
+    status_short,
+    status_elapsed,
+    fixture_league_id,
+    fixture_league_name,
+    fixture_league_country,
+    fixture_league_logo,
+    fixture_league_flag,
+    fixture_league_season,
+    round_name,
+    home_team_id,
+    home_team_name,
+    home_team_logo,
+    home_team_winner,
+    away_team_id,
+    away_team_name,
+    away_team_logo,
+    away_team_winner,
+    home_goals,
+    away_goals,
+    halftime_home_goals,
+    halftime_away_goals,
+    fulltime_home_goals,
+    fulltime_away_goals,
+    extratime_home_goals,
+    extratime_away_goals,
+    penalty_home_goals,
+    penalty_away_goals,
+    league_id,
+    season
+FROM fixtures

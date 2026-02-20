@@ -35,4 +35,7 @@ models:
       staging:
         +materialized: table
         +schema: staging
+      silver:
+        +materialized: table
+        +schema: silver
 
