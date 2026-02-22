@@ -42,13 +42,19 @@ API-Football (v3) → Python ETL → S3 (raw JSON) → Snowflake (COPY INTO) →
 3. **Snowflake RAW** — 18 tables loaded via COPY INTO, JSON stored as VARIANT
 4. **Full Discovery** — All 18 tables explored, JSON structures mapped, data quality issues documented
 
-### 🔄 NEXT — Staging Layer (dbt)
+### ✅ DONE — Staging Layer (dbt)
 
-- Build 15 staging models in dbt (flatten JSON → clean typed tables)
+- Built 15 staging models in dbt (flatten JSON → clean typed tables)
 - Domain-grouped folder structure: teams/, fixtures/, players/, transfers/
 - Full column extraction — public dataset philosophy (keep everything)
 
-### ✅ LATEST IMPLEMENTATION UPDATE (February 18, 2026)
+### 🔄 NEXT — Silver Layer (dbt)
+
+- Build normalized dimension and fact tables by joining staging models (`silver_*.sql`).
+- Domain-grouped folder structure aligned with staging: teams/, fixtures/, players/, transfers/
+- Establish relationships and unified views (e.g., teams + standings + statistics, players + season stats).
+
+### ✅ LATEST IMPLEMENTATION UPDATE (February 21, 2026)
 
 - **Phase 1 (foundation) complete**
   - Added dbt source definitions: `models/sources/raw_sources.yml`
@@ -61,6 +67,13 @@ API-Football (v3) → Python ETL → S3 (raw JSON) → Snowflake (COPY INTO) →
   - Implemented team/player/availability: `stg_team_standings`, `stg_team_statistics`, `stg_player_season_stats`, `stg_squad_players`, `stg_transfers`, `stg_injuries`
   - Existing implemented models retained: `stg_teams`, `stg_player_leaderboards`, `stg_match_team_stats`, `stg_lineup_players`
   - All staging models use dedup by latest `raw:entity_key` + `_loaded_at`, explicit casts, and lineage columns.
+- **Silver Layer (Modeling & Normalization) implemented**
+  - Created structured dimension and fact entities:
+    - **Teams:** `silver_teams` (joins teams, standings, statistics)
+    - **Players:** `silver_players` (joins squad players, season stats)
+    - **Fixtures:** `silver_fixture`, `silver_rounds`, `silver_match_events`, `silver_match_team_stats`, `silver_match_player_stats`, `silver_lineup_players`, `silver_predictions`
+    - **Transfers/Availability:** `silver_transfers`, `silver_injuries`
+  - Added new models to `dbt_project.yml` under the `silver` directory.
 - **Critical fixture key fix applied**
   - For `raw_fixtures_statistics` and `raw_fixtures_lineups`, `fixture_id` is extracted from:
     - `raw:params:fixture::INT`
@@ -466,10 +479,10 @@ FROM raw_predictions;
 
 | Step | Action | Priority |
 |------|--------|----------|
-| 1 | Run full staging build and tests: `dbt build -s staging` | HIGH |
-| 2 | Resolve any remaining model-level data quality failures (null keys, uniqueness, accepted values) | HIGH |
-| 3 | Capture Stage 3 evidence pack (row counts, duplicate checks, freshness snapshot) | HIGH |
-| 4 | Validate schema target configuration in dbt profile/macro (`DEV`, `staging`, `DEV_STAGING`) | MEDIUM |
+| 1 | Run full staging and silver build and tests: `dbt build` | HIGH |
+| 2 | Resolve any remaining model-level data quality failures (null keys, uniqueness, relationships) in silver tables | HIGH |
+| 3 | Capture Stage 3 evidence pack (row counts, duplicate checks, freshness snapshot) including silver layer | HIGH |
+| 4 | Validate schema target configuration in dbt profile/macro (`DEV`, `staging`, `silver`) | MEDIUM |
 | 5 | Update governance docs and move Stage 4 to Current Stage once Stage 3 evidence is complete | MEDIUM |
 
 ---

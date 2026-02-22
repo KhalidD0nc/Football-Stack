@@ -27,14 +27,19 @@ Transition rule (must be followed every stage):
 - Phase 1 foundations completed:
   - dbt source definitions added in `/Users/khalidr/Desktop/Leagues_Data_Project/leagues_data_dbt/models/sources/raw_sources.yml`
   - staging contracts/tests scaffolded in `/Users/khalidr/Desktop/Leagues_Data_Project/leagues_data_dbt/models/staging/staging_schema.yml`
-- Stage 3 model implementation complete (15 staging models):
+- Stage 3 staging implementations complete (15 staging models):
   - Teams: `stg_teams`, `stg_team_standings`, `stg_team_statistics`
   - Fixtures: `stg_fixtures`, `stg_rounds`, `stg_match_events`, `stg_match_team_stats`, `stg_match_player_stats`, `stg_lineup_players`, `stg_predictions`
   - Players: `stg_player_season_stats`, `stg_player_leaderboards`, `stg_squad_players`
   - Transfers/availability: `stg_transfers`, `stg_injuries`
+- Stage 3 normalized Silver models created (dimension/fact entities):
+  - Teams: `silver_teams` (joins teams, standings, and statistics)
+  - Players: `silver_players` (joins squad players and season stats)
+  - Fixtures: `silver_fixture`, `silver_rounds`, `silver_match_events`, `silver_match_team_stats`, `silver_match_player_stats`, `silver_lineup_players`, `silver_predictions`
+  - Transfers/availability: `silver_transfers`, `silver_injuries`
 - Key parsing fix applied for fixture-level endpoints:
   - For `/fixtures/statistics` and `/fixtures/lineups`, `fixture_id` is extracted from `raw:params:fixture` (not from `payload.response`).
-- Current focus: Stage 3 hardening (full build stability, quality evidence, and stage-transition docs).
+- Current focus: Stage 3 hardening (full build stability, data validation across new silver models, and stage-transition docs).
 
 ## Next Stage
 **Stage 4 - Gold Marts and Analytics**
