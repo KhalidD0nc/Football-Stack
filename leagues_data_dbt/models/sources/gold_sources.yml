@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: gold
+    database: LEAGUES_DATA
+    schema: GOLD
+    tables:
+      - name: ref_leagues
+        description: "Reference table for leagues"

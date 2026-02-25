@@ -17,7 +17,12 @@ Transition rule (must be followed every stage):
    - `docs/Data Engineering Implementation Checklist.md`
 
 ## Current Stage
-**Stage 3 - Silver Modeling and Normalization (In Progress)**
+**Stage 4 - Gold Marts and Analytics (Completed/In Progress)**
+- Build curated Gold-layer models for downstream consumers.
+- Consolidate Team Profiles (Performance, Scoring, Discipline).
+- Consolidate Player performances per match and per season.
+- Aggregate availability and fixture summaries.
+- Fix grain logic with league_id and season grouping.
 - Transform Bronze payloads into normalized, queryable Silver entities using dbt.
 - Standardize keys (team_id, player_id, fixture_id) across all models.
 - Implement staging layer for fixtures, teams, players, and statistics.
@@ -41,11 +46,20 @@ Transition rule (must be followed every stage):
   - For `/fixtures/statistics` and `/fixtures/lineups`, `fixture_id` is extracted from `raw:params:fixture` (not from `payload.response`).
 - Current focus: Stage 3 hardening (full build stability, data validation across new silver models, and stage-transition docs).
 
+### Stage 4 Progress (Latest)
+- Gold Layer models fully built and executed successfully:
+  - **Teams**: `gold_team_performance_summary`, `gold_team_scoring_profile`, `gold_team_discipline_profile`
+  - **Players**: `gold_player_performance_mart`, `gold_player_season_summary`
+  - **Fixtures**: `gold_match_team_performance`
+  - **Availability**: `gold_squad_availability`
+- Grain bug resolved: Included `league_id` and `season` in groupings and joins across Gold models to handle multi-season datasets safely.
+- NULL handling fixed: Ensured 0s appear instead of NULLs for missing averages/counts via COALESCE.
+
 ## Next Stage
-**Stage 4 - Gold Marts and Analytics**
-- Build curated Gold-layer models for downstream consumers (e.g., Team Performance, Player Form).
-- Implement advanced business logic and KPI calculations.
-- Finalize data freshness and observability dashboards.
+**Stage 5 - Data Observability & Agent Integration**
+- Establish stable interfaces and final documentation for the AI coaching system.
+- Build test suites focusing on data freshness and volume anomalies.
+- Finalize CI/CD pipeline and automated data lineage tracking.
 
 ## Features
 
@@ -107,6 +121,8 @@ dbt build -s stg_fixtures stg_rounds stg_match_events
 dbt build -s stg_match_player_stats stg_predictions
 dbt build -s stg_team_standings stg_team_statistics stg_player_season_stats stg_squad_players stg_transfers stg_injuries
 dbt build -s staging
+dbt build -s silver
+dbt run -s gold --full-refresh
 ```
 
 To view documentation:

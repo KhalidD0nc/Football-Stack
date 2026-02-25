@@ -5,11 +5,16 @@
 -- =============================================================================
 
 -- ── Database & Schema ───────────────────────────────────────────────────────
-
-CREATE DATABASE IF NOT EXISTS LEAGUES_DATA;
 USE DATABASE LEAGUES_DATA;
-CREATE SCHEMA IF NOT EXISTS RAW;
-USE SCHEMA RAW;
+CREATE SCHEMA IF NOT EXISTS LEAGUES_DATA.RAW;
+CREATE OR REPLACE STAGE LEAGUES_DATA.RAW.LEAGUES_STAGE
+    URL = 's3://leagues-datalake/'
+    CREDENTIALS = (
+        AWS_KEY_ID = 'AKIAZV7YKR3FLEE5MKV2'
+        AWS_SECRET_KEY = 'eswr9GgKvDSMK9cQXgsEWwbI1vK6HbcJbTeBlTWD'
+    );
+
+
 
 -- ── File Format ─────────────────────────────────────────────────────────────
 
@@ -17,16 +22,6 @@ CREATE FILE FORMAT IF NOT EXISTS json_raw
   TYPE = JSON
   STRIP_OUTER_ARRAY = FALSE
   IGNORE_UTF8_ERRORS = TRUE;
-
--- ── External Stage ──────────────────────────────────────────────────────────
--- Points at the raw/ prefix in S3.
--- Replace <bucket> and <storage_integration> with your values.
-
-CREATE STAGE IF NOT EXISTS stg_api_football
-  URL = 's3://leagues-datalake/raw/source=api_football/'
-  STORAGE_INTEGRATION = <storage_integration>
-  FILE_FORMAT = json_raw;
-
 -- =============================================================================
 -- S3 path layout (from storage.py):
 --   raw/source=api_football/league={id}/season={season}/
@@ -260,7 +255,7 @@ CREATE TABLE IF NOT EXISTS raw_predictions (
 
 
 -- ============================================================
--- COPY INTO for all 13 endpoints
+-- COPY INTO for all 18 endpoints
 -- ============================================================
 
 -- 1. fixtures
@@ -460,6 +455,7 @@ FILE_FORMAT = json_raw;
 
 
 -- COPY INTO for new endpoints
+-- 14. fixtures_events
 COPY INTO raw_fixtures_events (raw, league_id, season, dt, run_id, _file_name)
 FROM (
     SELECT $1,
@@ -473,6 +469,7 @@ FROM (
 PATTERN = '.*raw/source=api_football/.*endpoint=fixtures_events/dt=.*/part-.*\\.json'
 FILE_FORMAT = json_raw;
 
+-- 15. fixtures_lineups
 COPY INTO raw_fixtures_lineups (raw, league_id, season, dt, run_id, _file_name)
 FROM (
     SELECT $1,
@@ -486,6 +483,7 @@ FROM (
 PATTERN = '.*raw/source=api_football/.*endpoint=fixtures_lineups/dt=.*/part-.*\\.json'
 FILE_FORMAT = json_raw;
 
+-- 16. fixtures_players
 COPY INTO raw_fixtures_players (raw, league_id, season, dt, run_id, _file_name)
 FROM (
     SELECT $1,
@@ -499,6 +497,7 @@ FROM (
 PATTERN = '.*raw/source=api_football/.*endpoint=fixtures_players/dt=.*/part-.*\\.json'
 FILE_FORMAT = json_raw;
 
+-- 17. fixtures_statistics
 COPY INTO raw_fixtures_statistics (raw, league_id, season, dt, run_id, _file_name)
 FROM (
     SELECT $1,
@@ -512,6 +511,7 @@ FROM (
 PATTERN = '.*raw/source=api_football/.*endpoint=fixtures_statistics/dt=.*/part-.*\\.json'
 FILE_FORMAT = json_raw;
 
+-- 18. predictions
 COPY INTO raw_predictions (raw, league_id, season, dt, run_id, _file_name)
 FROM (
     SELECT $1,

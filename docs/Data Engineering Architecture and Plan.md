@@ -55,7 +55,7 @@ Exit criteria:
 - Run summaries confirm successful endpoint coverage with no critical failures.
 - Reruns remain idempotent via state markers.
 
-### Current Stage: Stage 3 - Silver Modeling and Normalization (In Progress)
+### Stage 3 - Silver Modeling and Normalization (Completed)
 Goal:
 - Transform Bronze payloads into normalized, queryable Silver entities.
 
@@ -79,7 +79,7 @@ Exit criteria:
 - Staging quality checks pass (null keys, uniqueness, accepted values, key relationships).
 - Stage 3 evidence pack is published (row counts, duplicate checks, freshness snapshot).
 
-### Next Stage: Stage 4 - Gold Marts and Analytics
+### Current Stage: Stage 4 - Gold Marts and Analytics (In Progress)
 Goal:
 - Build curated, business-level entities for analytics and downstream applications.
 
@@ -88,9 +88,27 @@ Architecture focus:
 - Implement specialized marts (e.g., Playing Styles, Player Comparison).
 - Finalize automated quality and freshness reporting.
 
+Current Gold models:
+- Teams: `gold_team_performance_summary`, `gold_team_scoring_profile`, `gold_team_discipline_profile`
+- Players: `gold_player_performance_mart`, `gold_player_season_summary`
+- Fixtures/Match: `gold_match_team_performance`, `gold_squad_availability`
+
 Exit criteria:
 - Gold models provide stable interfaces for the AI Coaching System.
 - Data lineage is fully documented and verifiable.
+
+### Next Stage: Stage 5 - Data Observability & Downstream Delivery
+Goal:
+- Finalize operational readiness and handoff interfaces to downstream applications (AI agent).
+
+Architecture focus:
+- Establish automated testing suites for data freshness and volume anomalies.
+- Prepare public dataset extraction patterns.
+- Ensure API integrations point to Gold layer robustly.
+
+Exit criteria:
+- The data platform operates autonomously with high data trustworthiness.
+- Alerts are raised proactively on upstream schema drifts or missing data.
 
 ## Implementation Tracking
 Implementation checklists, with explicit `Why` and `Goals` for each stage, are in:

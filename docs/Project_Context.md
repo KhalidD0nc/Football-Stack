@@ -48,20 +48,36 @@ API-Football (v3) → Python ETL → S3 (raw JSON) → Snowflake (COPY INTO) →
 - Domain-grouped folder structure: teams/, fixtures/, players/, transfers/
 - Full column extraction — public dataset philosophy (keep everything)
 
-### 🔄 NEXT — Silver Layer (dbt)
+### ✅ DONE — Silver Layer (dbt)
 
-- Build normalized dimension and fact tables by joining staging models (`silver_*.sql`).
+- Built normalized dimension and fact tables by joining staging models (`silver_*.sql`).
 - Domain-grouped folder structure aligned with staging: teams/, fixtures/, players/, transfers/
-- Establish relationships and unified views (e.g., teams + standings + statistics, players + season stats).
+- Established relationships and unified views (e.g., teams + standings + statistics, players + season stats).
 
-### ✅ LATEST IMPLEMENTATION UPDATE (February 21, 2026)
+### ✅ DONE — Gold Layer (dbt Marts)
+
+- Fact and dimension tables for analytics layer.
+- AI agent integration ready.
+- Created structured dimension and fact entities:
+  - **Teams:** `gold_team_performance_summary`, `gold_team_scoring_profile`, `gold_team_discipline_profile`
+  - **Players:** `gold_player_performance_mart`, `gold_player_season_summary`
+  - **Fixtures:** `gold_match_team_performance`
+  - **Availability:** `gold_squad_availability`
+
+### 🔄 NEXT — Stage 5 - Data Observability & Agent Integration
+
+- Establish interfaces for AI coaching system.
+- Build test suites for freshness and volume anomalies.
+- Finalize CI/CD pipeline and automated data lineage tracking.
+
+### ✅ LATEST IMPLEMENTATION UPDATE (February 25, 2026)
 
 - **Phase 1 (foundation) complete**
   - Added dbt source definitions: `models/sources/raw_sources.yml`
   - Added staging contracts/tests: `models/staging/staging_schema.yml`
 - **Phase 2 complete**
   - Implemented: `stg_teams`, `stg_player_leaderboards`
-- **Phase 3 implemented**
+- **Phase 3 complete**
   - Implemented fixture core: `stg_fixtures`, `stg_rounds`, `stg_match_events`
   - Implemented fixture deep: `stg_match_player_stats`, `stg_predictions`
   - Implemented team/player/availability: `stg_team_standings`, `stg_team_statistics`, `stg_player_season_stats`, `stg_squad_players`, `stg_transfers`, `stg_injuries`
@@ -74,15 +90,15 @@ API-Football (v3) → Python ETL → S3 (raw JSON) → Snowflake (COPY INTO) →
     - **Fixtures:** `silver_fixture`, `silver_rounds`, `silver_match_events`, `silver_match_team_stats`, `silver_match_player_stats`, `silver_lineup_players`, `silver_predictions`
     - **Transfers/Availability:** `silver_transfers`, `silver_injuries`
   - Added new models to `dbt_project.yml` under the `silver` directory.
-- **Critical fixture key fix applied**
-  - For `raw_fixtures_statistics` and `raw_fixtures_lineups`, `fixture_id` is extracted from:
-    - `raw:params:fixture::INT`
-  - Reason: these endpoint response rows do not reliably include `fixture.id` inside each `payload.response` object.
-
-### ⬜ TODO — Gold Layer (dbt Marts)
-
-- Fact and dimension tables for analytics
-- AI agent integration
+- **Gold Layer (Analytics & Marts) implemented**
+  - Built out team profiles for performance, scoring, and discipline.
+  - Built out player profiles for match performances and season summaries.
+  - Created squad availability and match team performance summaries.
+- **Critical Architectural Fixes Applied**
+  - Added `league_id` and `season` to the `GROUP BY` logic and joins in Gold models (`gold_team_scoring_profile`, `gold_team_discipline_profile`, `gold_team_performance_summary`) to prevent aggregation bugs across multiple seasons.
+  - Wrapped LEFT JOIN metrics in `COALESCE` to ensure 0s return instead of NULLs for missing data.
+  - Renamed `gold_match_summary` to `gold_match_team_performance` to better reflect its 2-rows-per-fixture grain.
+  - For `raw_fixtures_statistics` and `raw_fixtures_lineups`, `fixture_id` is extracted from `raw:params:fixture::INT` rather than `payload.response` due to inconsistent API payloads.
 
 ---
 
