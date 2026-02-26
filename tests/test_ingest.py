@@ -83,6 +83,7 @@ def _mock_s3(marker_exists: bool = False) -> MagicMock:
     s3.marker_exists.return_value = marker_exists
     s3.idempotency_key_from_parts.return_value = "idem-hash"
     s3.marker_key.return_value = "state/marker.json"
+    s3.marker_key_without_date.return_value = "state/marker-no-date.json"
     return s3
 
 
@@ -134,6 +135,31 @@ class TestIdempotencyBeforeFetch:
             endpoint="/standings",
             entity_key="league_snapshot",
             params={"league": 307, "season": 2025},
+        )
+
+        client.get.assert_called_once()
+        assert summary["api_calls"] == 1
+        assert summary["skipped_idempotent"] == 0
+        s3.put_raw.assert_called_once()
+        s3.put_marker.assert_called_once()
+
+    def test_safe_fetch_force_refresh_ignores_existing_marker(self) -> None:
+        client = _mock_client()
+        s3 = _mock_s3(marker_exists=True)
+        summary = _fresh_summary()
+
+        _safe_fetch_and_upload(
+            client=client,
+            s3=s3,
+            summary=summary,
+            part_counter=count(1),
+            config=DUMMY_CONFIG,
+            run_date=RUN_DATE,
+            run_id=RUN_ID,
+            endpoint="/standings",
+            entity_key="league_snapshot",
+            params={"league": 307, "season": 2025},
+            force_refresh=True,
         )
 
         client.get.assert_called_once()

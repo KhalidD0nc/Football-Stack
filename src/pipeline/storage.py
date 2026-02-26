@@ -32,6 +32,13 @@ class S3Writer:
             f"endpoint={ep}/dt={dt.isoformat()}/idempotency_key={idem_key}.json"
         )
 
+    def marker_key_without_date(self, league_id: int, season: int, endpoint: str, idem_key: str) -> str:
+        ep = self._normalize_endpoint(endpoint)
+        return (
+            f"state/source=api_football/league={league_id}/season={season}/"
+            f"endpoint={ep}/idempotency_key={idem_key}.json"
+        )
+
     def marker_exists(self, key: str) -> bool:
         try:
             self.s3.head_object(Bucket=self.bucket, Key=key)
