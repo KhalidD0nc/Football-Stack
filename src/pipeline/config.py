@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 
 from dotenv import load_dotenv
@@ -47,3 +47,12 @@ def resolve_run_date(run_date: str | None = None) -> date:
     if run_date:
         return date.fromisoformat(run_date)
     return date.today()
+
+
+def with_overrides(config: PipelineConfig, league_id: int | None = None) -> PipelineConfig:
+    """Return a runtime-adjusted config without mutating env-derived defaults."""
+    if league_id is None:
+        return config
+    if league_id <= 0:
+        raise ValueError("league_id override must be a positive integer")
+    return replace(config, league_id=league_id)

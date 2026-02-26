@@ -63,10 +63,15 @@ def _build_marker_key(
     run_date: date,
     endpoint: str,
     entity_key: str,
+    include_run_date: bool = True,
 ) -> tuple[str, str]:
     """Return (idempotency_hash, full_marker_key) for an endpoint+entity."""
-    idem = s3.idempotency_key_from_parts(endpoint, entity_key, config.season, run_date.isoformat())
-    marker = s3.marker_key(config.league_id, config.season, endpoint, run_date, idem)
+    if include_run_date:
+        idem = s3.idempotency_key_from_parts(endpoint, entity_key, config.season, run_date.isoformat())
+        marker = s3.marker_key(config.league_id, config.season, endpoint, run_date, idem)
+    else:
+        idem = s3.idempotency_key_from_parts(endpoint, entity_key, config.season)
+        marker = s3.marker_key_without_date(config.league_id, config.season, endpoint, idem)
     return idem, marker
 
 
@@ -148,9 +153,10 @@ def _safe_fetch_and_upload(
     endpoint: str,
     entity_key: str,
     params: dict[str, Any],
+    force_refresh: bool = False,
 ) -> None:
     _idem, marker = _build_marker_key(s3, config, run_date, endpoint, entity_key)
-    if s3.marker_exists(marker):
+    if s3.marker_exists(marker) and not force_refresh:
         summary["skipped_idempotent"] += 1
         return
 
@@ -251,7 +257,14 @@ def _ingest_team_deep_fixture_details(
     for fixture_id in fixture_ids:
         for endpoint in DETAIL_ENDPOINTS:
             entity_key = f"fixture={fixture_id}"
-            _idem, marker = _build_marker_key(s3, config, run_date, endpoint, entity_key)
+            _idem, marker = _build_marker_key(
+                s3,
+                config,
+                run_date,
+                endpoint,
+                entity_key,
+                include_run_date=False,
+            )
             if s3.marker_exists(marker):
                 summary["skipped_idempotent"] += 1
                 continue
@@ -281,7 +294,12 @@ def _ingest_team_deep_fixture_details(
             summary["detail_writes"] += 1
 
 
-def run_ingestion(config: PipelineConfig, run_date: date) -> dict[str, int]:
+def run_ingestion(
+    config: PipelineConfig,
+    run_date: date,
+    force_league_snapshot_refresh: bool = False,
+    baseline_only: bool = False,
+) -> dict[str, int]:
     client = ApiFootballClient(config.api_base_url, config.api_football_key)
     s3 = S3Writer(config.s3_bucket, config.aws_region)
     run_id = generate_run_id()
@@ -306,7 +324,8 @@ def run_ingestion(config: PipelineConfig, run_date: date) -> dict[str, int]:
     # 1) League fixtures baseline snapshot (required)
     _idem, fixtures_marker = _build_marker_key(s3, config, run_date, "/fixtures", "league_snapshot")
     fixtures_params = {"league": config.league_id, "season": config.season, "timezone": config.timezone}
-    if s3.marker_exists(fixtures_marker):
+    fixtures_marker_exists = s3.marker_exists(fixtures_marker)
+    if fixtures_marker_exists and not force_league_snapshot_refresh:
         summary["skipped_idempotent"] += 1
         # Still need fixture ids for downstream steps — re-fetch is unavoidable here
         fixtures_payload = _call_api(client, summary, "/fixtures", fixtures_params)
@@ -334,7 +353,8 @@ def run_ingestion(config: PipelineConfig, run_date: date) -> dict[str, int]:
     # 2) Teams baseline snapshot (required)
     _idem, teams_marker = _build_marker_key(s3, config, run_date, "/teams", "league_snapshot")
     teams_params = {"league": config.league_id, "season": config.season}
-    if s3.marker_exists(teams_marker):
+    teams_marker_exists = s3.marker_exists(teams_marker)
+    if teams_marker_exists and not force_league_snapshot_refresh:
         summary["skipped_idempotent"] += 1
         # Still need team ids for downstream steps — re-fetch is unavoidable here
         teams_payload = _call_api(client, summary, "/teams", teams_params)
@@ -377,7 +397,13 @@ def run_ingestion(config: PipelineConfig, run_date: date) -> dict[str, int]:
             endpoint=endpoint,
             entity_key=entity_key,
             params=params,
+            force_refresh=force_league_snapshot_refresh,
         )
+
+    if baseline_only:
+        logger.info("Baseline-only ingestion enabled; skipping players pages, team-level endpoints, and deep fixture details.")
+        logger.info("Ingestion summary: %s", summary)
+        return summary
 
     # 4) Paginated league players snapshot
     _ingest_paginated_league_players(

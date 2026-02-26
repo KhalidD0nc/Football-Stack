@@ -104,8 +104,69 @@ By default, this will run for the current date. You can also specify a specific 
 python -m scripts.run_daily --date 2026-02-15
 ```
 
+Run a specific league id (single-league run):
+
+```bash
+python -m scripts.run_daily --league-id 39
+python -m scripts.run_daily --league-id 307
+```
+
+### End-to-End Automated Pipeline (Recommended)
+Run ingestion + Snowflake RAW sync (`COPY INTO`) + dbt build in one command:
+
+```bash
+python -m scripts.run_pipeline
+```
+
+Optional date override:
+
+```bash
+python -m scripts.run_pipeline --date 2026-02-15
+```
+
+Run a specific league id (single-league run):
+
+```bash
+python -m scripts.run_pipeline --league-id 39
+python -m scripts.run_pipeline --league-id 307
+```
+
+If you need to resync pending RAW files across all dates (no `dt` filter):
+
+```bash
+python -m scripts.run_pipeline --skip-ingestion --raw-sync-all-dates
+```
+
+If late-night fixtures finished after your first run on the same date, force-refresh league snapshots:
+
+```bash
+python -m scripts.run_pipeline --force-league-snapshot-refresh
+```
+
+For a low-cost same-day refresh (baseline endpoints only):
+
+```bash
+python -m scripts.run_pipeline --force-league-snapshot-refresh --baseline-only
+```
+
+What this command does:
+- Runs API-Football ingestion to S3 (`scripts.run_daily` logic).
+- Runs dbt macro `sync_raw_from_s3` to load new S3 files into `LEAGUES_DATA.RAW.*`.
+- Runs `dbt build --select staging silver gold` (models + tests).
+
+Season selection note:
+- `SEASON` is always read from `.env` (`SEASON=...`), including when `--league-id` is used.
+
+If you want it fully unattended on one machine, schedule it with `cron`:
+
+```bash
+15 3 * * * cd /Users/khalidr/Desktop/Leagues_Data_Project && /bin/zsh -lc 'source .venv/bin/activate && python -m scripts.run_pipeline >> logs/pipeline.log 2>&1'
+```
+
 ### dbt Transformations
 The dbt project is located in `leagues_data_dbt`.
+
+Note: The orchestration script expects `dbt` CLI to be installed and available on `PATH`.
 
 ```bash
 cd leagues_data_dbt
