@@ -274,10 +274,16 @@ models:
       - name: transfer_date
         data_tests:
           - not_null
+      - name: league_id
+        data_tests:
+          - not_null
+      - name: season
+        data_tests:
+          - not_null
     data_tests:
       - unique:
           arguments:
-            column_name: "concat(cast(player_id as varchar), '|', cast(transfer_date as varchar), '|', coalesce(cast(from_team_id as varchar), 'na'), '|', coalesce(cast(to_team_id as varchar), 'na'), '|', coalesce(transfer_type, 'na'))"
+            column_name: "concat(cast(player_id as varchar), '|', cast(transfer_date as varchar), '|', coalesce(cast(from_team_id as varchar), 'na'), '|', coalesce(cast(to_team_id as varchar), 'na'), '|', coalesce(transfer_type, 'na'), '|', cast(league_id as varchar), '|', cast(season as varchar))"
 
   - name: stg_injuries
     config:

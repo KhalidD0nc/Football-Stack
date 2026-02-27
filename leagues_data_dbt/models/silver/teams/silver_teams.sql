@@ -87,5 +87,9 @@ SELECT
 FROM teams t
 LEFT JOIN standings ts
     ON t.team_id = ts.team_id
+   AND t.league_id = ts.league_id
+   AND t.season = ts.season
 LEFT JOIN statistics tst
     ON t.team_id = tst.team_id
+   AND t.league_id = tst.league_id
+   AND t.season = tst.season

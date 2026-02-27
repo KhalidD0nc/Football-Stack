@@ -10,7 +10,7 @@ with source_dedup as (
         _loaded_at
     from {{ source('raw', 'raw_fixtures_players') }}
     qualify row_number() over (
-        partition by raw:entity_key::varchar
+        partition by league_id, season, raw:entity_key::varchar
         order by _loaded_at desc
     ) = 1
 ),
@@ -128,7 +128,7 @@ deduped as (
         _loaded_at
     from flattened
     qualify row_number() over (
-        partition by fixture_id, team_id, player_id
+        partition by league_id, season, fixture_id, team_id, player_id
         order by coalesce(minutes_played, -1) desc, coalesce(rating, -1) desc, _loaded_at desc
     ) = 1
 )

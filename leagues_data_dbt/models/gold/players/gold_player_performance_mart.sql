@@ -43,7 +43,9 @@ lineup_context AS (
         player_id,
         fixture_id,
         formation,
-        grid
+        grid,
+        league_id,
+        season
     FROM {{ ref('silver_lineup_players') }}
 ),
 
@@ -57,7 +59,9 @@ fixture_context AS (
         away_team_id,
         away_team_name,
         home_goals,
-        away_goals
+        away_goals,
+        league_id,
+        season
     FROM {{ ref('silver_fixture') }}
 )
 
@@ -114,5 +118,12 @@ SELECT
     p.season
 
 FROM player_stats p
-LEFT JOIN lineup_context l ON p.player_id = l.player_id AND p.fixture_id = l.fixture_id
-LEFT JOIN fixture_context f ON p.fixture_id = f.fixture_id
+LEFT JOIN lineup_context l
+    ON p.player_id = l.player_id
+   AND p.fixture_id = l.fixture_id
+   AND p.league_id = l.league_id
+   AND p.season = l.season
+LEFT JOIN fixture_context f
+    ON p.fixture_id = f.fixture_id
+   AND p.league_id = f.league_id
+   AND p.season = f.season
