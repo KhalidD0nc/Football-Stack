@@ -10,7 +10,7 @@ with source_dedup as (
         _loaded_at
     from {{ source('raw', 'raw_transfers') }}
     qualify row_number() over (
-        partition by raw:entity_key::varchar
+        partition by league_id, season, raw:entity_key::varchar
         order by _loaded_at desc
     ) = 1
 ),
@@ -67,6 +67,8 @@ deduped as (
     from flattened
     qualify row_number() over (
         partition by
+            league_id,
+            season,
             player_id,
             transfer_date,
             coalesce(from_team_id, -1),

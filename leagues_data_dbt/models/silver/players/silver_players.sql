@@ -69,3 +69,5 @@ FROM squad sq
 LEFT JOIN stats s
     ON sq.player_id = s.player_id
     AND sq.team_id = s.team_id
+    AND sq.league_id = s.league_id
+    AND sq.season = s.season

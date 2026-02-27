@@ -10,7 +10,7 @@ with top_scorers_source as (
         _loaded_at
     from {{ source('raw', 'raw_players_topscorers') }}
     qualify row_number() over (
-        partition by raw:entity_key::varchar
+        partition by league_id, season, raw:entity_key::varchar
         order by _loaded_at desc
     ) = 1
 ),
@@ -55,7 +55,7 @@ top_assists_source as (
         _loaded_at
     from {{ source('raw', 'raw_players_topassists') }}
     qualify row_number() over (
-        partition by raw:entity_key::varchar
+        partition by league_id, season, raw:entity_key::varchar
         order by _loaded_at desc
     ) = 1
 ),
@@ -100,7 +100,7 @@ top_yellow_cards_source as (
         _loaded_at
     from {{ source('raw', 'raw_players_topyellowcards') }}
     qualify row_number() over (
-        partition by raw:entity_key::varchar
+        partition by league_id, season, raw:entity_key::varchar
         order by _loaded_at desc
     ) = 1
 ),
@@ -145,7 +145,7 @@ top_red_cards_source as (
         _loaded_at
     from {{ source('raw', 'raw_players_topredcards') }}
     qualify row_number() over (
-        partition by raw:entity_key::varchar
+        partition by league_id, season, raw:entity_key::varchar
         order by _loaded_at desc
     ) = 1
 ),

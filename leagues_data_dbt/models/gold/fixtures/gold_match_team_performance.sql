@@ -4,13 +4,15 @@ WITH match_events_agg AS (
     SELECT
         fixture_id,
         team_id,
+        league_id,
+        season,
         COUNT(CASE WHEN event_type = 'Goal'                              THEN 1 END) as goals_scored,
         COUNT(CASE WHEN event_type = 'Goal' AND event_detail = 'Penalty' THEN 1 END) as penalty_goals,
         COUNT(CASE WHEN event_type = 'Goal' AND event_detail = 'Own Goal' THEN 1 END) as own_goals,
         COUNT(CASE WHEN event_type = 'subst'                             THEN 1 END) as substitutions_made,
         COUNT(CASE WHEN event_type = 'Var'                               THEN 1 END) as var_incidents
     FROM {{ ref('silver_match_events') }}
-    GROUP BY fixture_id, team_id
+    GROUP BY fixture_id, team_id, league_id, season
 ),
 
 -- UNPIVOT: guarantee 2 rows per fixture (home + away) from fixture itself
@@ -104,8 +106,14 @@ SELECT
 
 FROM team_fixture f
 LEFT JOIN {{ ref('silver_match_team_stats') }} s
-    ON f.fixture_id = s.fixture_id AND f.team_id = s.team_id
+    ON f.fixture_id = s.fixture_id
+   AND f.team_id = s.team_id
+   AND f.league_id = s.league_id
+   AND f.season = s.season
 LEFT JOIN match_events_agg e
-    ON f.fixture_id = e.fixture_id AND f.team_id = e.team_id
+    ON f.fixture_id = e.fixture_id
+   AND f.team_id = e.team_id
+   AND f.league_id = e.league_id
+   AND f.season = e.season
 
 ORDER BY f.fixture_date DESC

@@ -10,7 +10,7 @@ with source_dedup as (
         _loaded_at
     from {{ source('raw', 'raw_fixtures_statistics') }}
     qualify row_number() over (
-        partition by raw:entity_key::varchar
+        partition by league_id, season, raw:entity_key::varchar
         order by _loaded_at desc
     ) = 1
 ),
