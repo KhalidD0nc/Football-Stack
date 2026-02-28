@@ -14,13 +14,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.pipeline.ingest import (
+from src.pipeline.fetch import (
     _build_marker_key,
     _call_api,
+    _safe_fetch_and_upload,
+)
+from src.pipeline.steps import (
     _ingest_paginated_league_players,
     _ingest_team_deep_fixture_details,
-    _safe_fetch_and_upload,
-    _upload_payload,
     DETAIL_ENDPOINTS,
 )
 from src.pipeline.config import PipelineConfig

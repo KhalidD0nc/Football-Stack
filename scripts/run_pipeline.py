@@ -106,6 +106,14 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Override env LEAGUE_ID for this run (single-league execution).",
     )
+    parser.add_argument(
+        "--league-ids",
+        dest="league_ids",
+        type=_positive_int,
+        nargs="+",
+        default=None,
+        help="Run ingestion for multiple leagues sequentially, then dbt once (e.g. --league-ids 307 39 140 135).",
+    )
     parser.add_argument("--project-dir", default="leagues_data_dbt", help="dbt project directory.")
     parser.add_argument("--profiles-dir", default="leagues_data_dbt", help="dbt profiles directory.")
     parser.add_argument(
@@ -160,23 +168,26 @@ def main() -> None:
     )
 
     if not args.skip_ingestion:
-        step_start = perf_counter()
-        config = with_overrides(load_config(), league_id=args.league_id)
-        logger.info(
-            "Step start: ingestion (league_id=%s season=%s baseline_only=%s force_snapshot_refresh=%s)",
-            config.league_id,
-            config.season,
-            args.baseline_only,
-            args.force_league_snapshot_refresh,
-        )
-        summary = run_ingestion(
-            config,
-            run_date,
-            force_league_snapshot_refresh=args.force_league_snapshot_refresh,
-            baseline_only=args.baseline_only,
-        )
-        logger.info("Step complete: ingestion in %.2fs", perf_counter() - step_start)
-        logger.info("Ingestion complete for %s: %s", run_date.isoformat(), summary)
+        base_config = load_config()
+        league_ids = args.league_ids or ([args.league_id] if args.league_id else [None])
+        for league_id in league_ids:
+            step_start = perf_counter()
+            config = with_overrides(base_config, league_id=league_id)
+            logger.info(
+                "Step start: ingestion (league_id=%s season=%s baseline_only=%s force_snapshot_refresh=%s)",
+                config.league_id,
+                config.season,
+                args.baseline_only,
+                args.force_league_snapshot_refresh,
+            )
+            summary = run_ingestion(
+                config,
+                run_date,
+                force_league_snapshot_refresh=args.force_league_snapshot_refresh,
+                baseline_only=args.baseline_only,
+            )
+            logger.info("Step complete: ingestion league_id=%s in %.2fs", config.league_id, perf_counter() - step_start)
+            logger.info("Ingestion complete league_id=%s for %s: %s", config.league_id, run_date.isoformat(), summary)
     else:
         logger.info("Skipping ingestion step")
 

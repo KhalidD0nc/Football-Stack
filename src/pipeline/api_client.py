@@ -30,7 +30,7 @@ class SimpleRateLimiter:
 
 
 class ApiFootballClient:
-    def __init__(self, base_url: str, api_key: str, rate_limit_per_sec: float = 5.0) -> None:
+    def __init__(self, base_url: str, api_key: str, rate_limit_per_sec: float = 4.5) -> None:
         self.base_url = base_url.rstrip("/")
         self.rate_limiter = SimpleRateLimiter(rate_limit_per_sec)
         self._attempts_lock = threading.Lock()

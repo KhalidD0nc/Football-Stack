@@ -17,6 +17,7 @@ airflow/.env
 logs/
 target/
 dbt_packages/
+leagues_data_dbt/profiles.yml
 
 # OS
 .DS_Store
