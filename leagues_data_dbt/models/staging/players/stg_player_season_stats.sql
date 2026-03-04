@@ -169,6 +169,6 @@ select
     _loaded_at
 from flattened
 qualify row_number() over (
-    partition by player_id, team_id, stats_season
+    partition by player_id, team_id, stats_season, stats_league_id, league_id, season
     order by _loaded_at desc
 ) = 1

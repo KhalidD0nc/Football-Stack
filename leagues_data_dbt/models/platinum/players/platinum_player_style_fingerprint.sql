@@ -56,10 +56,10 @@ fingerprint AS (
         duel_win_rate,
         dribble_success_rate,
         shot_accuracy,
-        ROUND(goals_per_90 * 40 + shot_accuracy * 0.3 + season_goals * 0.3, 2)                                                           as poacher_score,
+        ROUND(goals_per_90 * 40 + COALESCE(shot_accuracy, 0) * 0.3 + season_goals * 0.3, 2)                                              as poacher_score,
         ROUND(assists_per_90 * 40 + season_key_passes * 0.5 + season_assists * 0.3, 2)                                                   as playmaker_score,
-        ROUND(season_tackles * 0.4 + season_interceptions * 0.4 + duel_win_rate * 0.2, 2)                                                as destroyer_score,
-        ROUND(dribble_success_rate * 0.5 + season_dribbles_success * 0.5, 2)                                                             as dribbler_score,
+        ROUND(season_tackles * 0.4 + season_interceptions * 0.4 + COALESCE(duel_win_rate, 0) * 0.2, 2)                                   as destroyer_score,
+        ROUND(COALESCE(dribble_success_rate, 0) * 0.5 + season_dribbles_success * 0.5, 2)                                                as dribbler_score,
         ROUND(goals_per_90 * 15 + assists_per_90 * 15 + season_tackles * 0.2 + season_dribbles_success * 0.2 + avg_rating * 2, 2)       as engine_score,
         ROUND(season_blocks * 0.5 + season_interceptions * 0.3 + season_tackles * 0.2, 2)                                                as guardian_score
     FROM base

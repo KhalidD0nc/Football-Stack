@@ -13,7 +13,7 @@ WITH primary_position AS (
         FROM {{ ref('gold_player_season_summary') }}
         WHERE position != 'G'
         GROUP BY player_id, league_id, season, position
-    )
+    ) subq
     WHERE rn = 1
 ),
 
@@ -128,5 +128,5 @@ SELECT
     dribble_success_rate,
     shot_accuracy,
     efficiency_score,
-    RANK() OVER (PARTITION BY league_id, position ORDER BY efficiency_score DESC) as efficiency_rank
+    RANK() OVER (PARTITION BY league_id, season, position, minutes_bracket ORDER BY efficiency_score DESC) as efficiency_rank
 FROM per90

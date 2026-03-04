@@ -38,7 +38,7 @@ last_5 AS (
             ) as recency_rank
         FROM {{ ref('gold_player_performance_mart') }}
         WHERE rating IS NOT NULL
-    )
+    ) subq
     WHERE recency_rank <= 5
     GROUP BY player_id, league_id, season
 ),

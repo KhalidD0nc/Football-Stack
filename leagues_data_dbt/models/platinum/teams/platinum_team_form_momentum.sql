@@ -19,7 +19,7 @@ WITH match_results AS (
             ELSE 'L'
         END as result,
         ROW_NUMBER() OVER (
-            PARTITION BY e.team_id, e.league_id 
+            PARTITION BY e.team_id, e.league_id, e.season
             ORDER BY e.fixture_date DESC
         ) as match_recency
     FROM {{ ref('gold_match_team_performance') }} e
@@ -62,5 +62,5 @@ SELECT
     recent_goals_conceded,
     weighted_points,
     ROUND((weighted_points / 45.0) * 100, 1) as momentum_index,
-    RANK() OVER (PARTITION BY league_id ORDER BY weighted_points DESC) as momentum_rank
+    RANK() OVER (PARTITION BY league_id, season ORDER BY weighted_points DESC) as momentum_rank
 FROM weighted

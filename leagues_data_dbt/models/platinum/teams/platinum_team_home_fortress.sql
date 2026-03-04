@@ -80,5 +80,5 @@ SELECT
     home_goals_per_match,
     away_goals_per_match,
     fortress_score,
-    RANK() OVER (PARTITION BY league_id ORDER BY fortress_score DESC) as fortress_rank
+    RANK() OVER (PARTITION BY league_id, season ORDER BY fortress_score DESC) as fortress_rank
 FROM fortress
