@@ -41,3 +41,6 @@ models:
       gold:
         +materialized: table
         +schema: gold
+      platinum:
+        +materialized: table
+        +schema: platinum
