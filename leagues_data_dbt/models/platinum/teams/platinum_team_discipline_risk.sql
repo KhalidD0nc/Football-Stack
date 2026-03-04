@@ -60,5 +60,5 @@ SELECT
     total_reds,
     late_aggression_reds,
     discipline_risk_score,
-    RANK() OVER (PARTITION BY league_id ORDER BY discipline_risk_score DESC) as risk_rank
+    RANK() OVER (PARTITION BY league_id, season ORDER BY discipline_risk_score DESC) as risk_rank
 FROM risk

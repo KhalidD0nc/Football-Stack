@@ -17,7 +17,7 @@ WITH position_dedup AS (
                 ORDER BY total_minutes DESC
             ) as rn
         FROM {{ ref('gold_player_season_summary') }}
-    )
+    ) subq
     WHERE rn = 1
 ),
 
@@ -116,5 +116,5 @@ SELECT
     defensive_impact,
     consistency_impact,
     impact_score,
-    RANK() OVER (PARTITION BY league_id ORDER BY impact_score DESC) as impact_rank
+    RANK() OVER (PARTITION BY league_id, season ORDER BY impact_score DESC) as impact_rank
 FROM scored

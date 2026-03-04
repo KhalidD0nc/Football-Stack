@@ -69,5 +69,5 @@ SELECT
     away_goals_conceded_per_match,
     defensive_consistency_score,
     defensive_profile,
-    RANK() OVER (PARTITION BY league_id ORDER BY defensive_consistency_score DESC) as defensive_rank
+    RANK() OVER (PARTITION BY league_id, season ORDER BY defensive_consistency_score DESC) as defensive_rank
 FROM consistency

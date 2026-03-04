@@ -13,7 +13,7 @@ WITH primary_position AS (
         FROM {{ ref('gold_player_season_summary') }}
         WHERE position != 'G'
         GROUP BY player_id, league_id, season, position
-    )
+    ) subq
     WHERE rn = 1
 ),
 
@@ -106,6 +106,6 @@ SELECT
     fouls_drawn_p90,
     duel_dominance_score,
     dominance_label,
-    RANK() OVER (PARTITION BY league_id ORDER BY duel_dominance_score DESC) as dominance_rank
+    RANK() OVER (PARTITION BY league_id, season ORDER BY duel_dominance_score DESC) as dominance_rank
 FROM dominance
 WHERE season_duels >= 20
