@@ -79,53 +79,49 @@ joined AS (
         a.actual_result,
         a.actual_winner_team_id,
         -- Was the prediction directionally correct?
+        -- (always non-NULL: INNER JOIN guarantees only completed fixtures reach here)
         CASE
-            WHEN a.actual_result IS NULL                                THEN NULL  -- match not played
             WHEN a.actual_result = 'Draw'
              AND p.predicted_winner_team_id IS NULL                     THEN TRUE
             WHEN p.predicted_winner_team_id = a.actual_winner_team_id  THEN TRUE
             ELSE FALSE
         END                                                             AS prediction_correct,
-        -- Confidence: probability assigned to the predicted outcome
+        -- Confidence: probability assigned to the predicted outcome (single source of truth)
         CASE
             WHEN p.predicted_winner_team_id = p.home_team_id THEN p.home_win_percent_value
             WHEN p.predicted_winner_team_id = p.away_team_id THEN p.away_win_percent_value
             ELSE p.draw_percent_value
-        END                                                             AS prediction_confidence,
-        -- Unexpected result: high-confidence prediction that failed
-        CASE
-            WHEN a.actual_result IS NULL THEN NULL
-            WHEN p.predicted_winner_team_id != a.actual_winner_team_id
-             AND CASE
-                    WHEN p.predicted_winner_team_id = p.home_team_id THEN p.home_win_percent_value
-                    WHEN p.predicted_winner_team_id = p.away_team_id THEN p.away_win_percent_value
-                    ELSE p.draw_percent_value
-                 END >= 50                                              THEN TRUE
-            ELSE FALSE
-        END                                                             AS was_upset,
-        CASE
-            WHEN a.actual_result IS NULL THEN NULL
-            WHEN p.predicted_winner_team_id = a.actual_winner_team_id
-             AND CASE
-                    WHEN p.predicted_winner_team_id = p.home_team_id THEN p.home_win_percent_value
-                    WHEN p.predicted_winner_team_id = p.away_team_id THEN p.away_win_percent_value
-                    ELSE p.draw_percent_value
-                 END < 50                                               THEN TRUE
-            ELSE FALSE
-        END                                                             AS low_confidence_correct
+        END                                                             AS prediction_confidence
     FROM predictions p
     INNER JOIN actuals a ON p.fixture_id = a.fixture_id
+),
+
+flagged AS (
+    SELECT
+        *,
+        -- High-confidence wrong prediction
+        CASE
+            WHEN prediction_correct = FALSE
+             AND prediction_confidence >= 50  THEN TRUE
+            ELSE FALSE
+        END                                  AS was_upset,
+        -- Correct call despite low confidence
+        CASE
+            WHEN prediction_correct = TRUE
+             AND prediction_confidence < 50   THEN TRUE
+            ELSE FALSE
+        END                                  AS low_confidence_correct
+    FROM joined
 ),
 
 scored AS (
     SELECT
         *,
-        -- Prediction outcome label for AI agent
+        -- Prediction outcome label
         CASE
-            WHEN prediction_correct IS NULL     THEN 'Pending'
             WHEN prediction_correct = TRUE
              AND prediction_confidence >= 60    THEN 'Confident & Correct'
-            WHEN low_confidence_correct = TRUE   THEN 'Low Confidence Correct'
+            WHEN low_confidence_correct = TRUE  THEN 'Low Confidence Correct'
             WHEN prediction_correct = TRUE
              AND prediction_confidence < 60     THEN 'Correct'
             WHEN was_upset = TRUE               THEN 'High Confidence Wrong'
@@ -136,7 +132,7 @@ scored AS (
         ABS(home_goals - away_goals)                                    AS actual_goal_margin,
         -- Score the model: 1 if correct, 0 if wrong (for accuracy aggregation)
         CASE WHEN prediction_correct = TRUE THEN 1.0 ELSE 0.0 END      AS accuracy_score
-    FROM joined
+    FROM flagged
 )
 
 SELECT

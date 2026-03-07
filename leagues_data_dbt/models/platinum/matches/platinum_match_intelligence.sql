@@ -102,9 +102,9 @@ combined AS (
             WHEN t.away_shots > t.home_shots AND f.away_goals > f.home_goals THEN TRUE
             ELSE FALSE
         END                                                             AS dominant_team_won,
-        -- xG vs actual: over or under performance
-        ROUND(f.home_goals - COALESCE(t.home_xg, 0), 2)               AS home_xg_overperformance,
-        ROUND(f.away_goals - COALESCE(t.away_xg, 0), 2)               AS away_xg_overperformance
+        -- xG vs actual: over or under performance (NULL when xG data unavailable)
+        ROUND(f.home_goals - t.home_xg, 2)                            AS home_xg_overperformance,
+        ROUND(f.away_goals - t.away_xg, 2)                            AS away_xg_overperformance
     FROM fixture_base f
     LEFT JOIN team_stats t ON f.fixture_id = t.fixture_id
 ),

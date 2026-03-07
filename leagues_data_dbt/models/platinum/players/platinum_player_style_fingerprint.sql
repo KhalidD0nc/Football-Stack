@@ -1,7 +1,9 @@
 {{ config(materialized='table') }}
 
 WITH primary_position AS (
-    -- Pick dominant position per player by total minutes
+    -- Pick dominant outfield position per player by total minutes
+    -- Excludes goalkeepers (position = 'G') as archetype scores are not meaningful for GKs;
+    -- consistent with platinum_player_duel_dominance and platinum_player_per90_efficiency
     SELECT player_id, league_id, season, position
     FROM (
         SELECT
@@ -11,6 +13,7 @@ WITH primary_position AS (
                 ORDER BY SUM(total_minutes) DESC
             ) as rn
         FROM {{ ref('gold_player_season_summary') }}
+        WHERE position != 'G'
         GROUP BY player_id, league_id, season, position
     ) subq
     WHERE rn = 1
