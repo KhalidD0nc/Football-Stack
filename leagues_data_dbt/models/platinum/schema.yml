@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: platinum_prediction_accuracy
+    description: "Evaluates the accuracy of fixture predictions against actual results"
+    columns:
+      - name: fixture_id
+        description: "Primary key"
+        tests:
+          - unique
+          - not_null
+      - name: was_upset
+        description: "True when a high-confidence prediction fails"
+      - name: low_confidence_correct
+        description: "True when a correct prediction had less than 50 percent confidence"
+
+  - name: platinum_match_intelligence
+    description: "Advanced match intelligence including dominance, possession, and narrative"
+    columns:
+      - name: fixture_id
+        description: "Primary key"
+        tests:
+          - unique
+          - not_null
+
+  - name: platinum_player_style_fingerprint
+    description: "Player style fingerprinting per season and league based on archetypes"
+    columns:
+      - name: fingerprint_id
+        description: "Primary key for the player-league-season grain"
+        tests:
+          - unique
+          - not_null
+      - name: player_id
+        tests:
+          - not_null
+      - name: league_id
+        tests:
+          - not_null
+      - name: season
+        tests:
+          - not_null

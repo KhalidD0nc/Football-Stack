@@ -47,7 +47,7 @@ actuals AS (
             ELSE 'Draw'
         END                                             AS actual_result
     FROM {{ ref('gold_match_summary') }}
-    WHERE status_short = 'FT'
+    WHERE status_short IN ('FT', 'AET', 'PEN')
 ),
 
 joined AS (
@@ -92,7 +92,7 @@ joined AS (
             WHEN p.predicted_winner_team_id = p.away_team_id THEN p.away_win_percent_value
             ELSE p.draw_percent_value
         END                                                             AS prediction_confidence,
-        -- Upset detection: low-confidence prediction that came true, or high-confidence that failed
+        -- Unexpected result: high-confidence prediction that failed
         CASE
             WHEN a.actual_result IS NULL THEN NULL
             WHEN p.predicted_winner_team_id != a.actual_winner_team_id
@@ -102,7 +102,17 @@ joined AS (
                     ELSE p.draw_percent_value
                  END >= 50                                              THEN TRUE
             ELSE FALSE
-        END                                                             AS was_upset
+        END                                                             AS was_upset,
+        CASE
+            WHEN a.actual_result IS NULL THEN NULL
+            WHEN p.predicted_winner_team_id = a.actual_winner_team_id
+             AND CASE
+                    WHEN p.predicted_winner_team_id = p.home_team_id THEN p.home_win_percent_value
+                    WHEN p.predicted_winner_team_id = p.away_team_id THEN p.away_win_percent_value
+                    ELSE p.draw_percent_value
+                 END < 50                                               THEN TRUE
+            ELSE FALSE
+        END                                                             AS low_confidence_correct
     FROM predictions p
     INNER JOIN actuals a ON p.fixture_id = a.fixture_id
 ),
@@ -115,8 +125,9 @@ scored AS (
             WHEN prediction_correct IS NULL     THEN 'Pending'
             WHEN prediction_correct = TRUE
              AND prediction_confidence >= 60    THEN 'Confident & Correct'
+            WHEN low_confidence_correct = TRUE   THEN 'Low Confidence Correct'
             WHEN prediction_correct = TRUE
-             AND prediction_confidence < 60     THEN 'Low Confidence Correct'
+             AND prediction_confidence < 60     THEN 'Correct'
             WHEN was_upset = TRUE               THEN 'High Confidence Wrong'
             WHEN actual_result = 'Draw'         THEN 'Draw Surprise'
             ELSE 'Incorrect'
@@ -150,6 +161,7 @@ SELECT
     prediction_confidence,
     prediction_correct,
     was_upset,
+    low_confidence_correct,
     prediction_outcome,
     accuracy_score,
     comparison_form_home,

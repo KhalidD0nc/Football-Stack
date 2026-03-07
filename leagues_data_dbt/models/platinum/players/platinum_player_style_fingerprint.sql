@@ -20,8 +20,7 @@ base AS (
     -- Aggregate-first pattern: sum all fragments per player, then apply threshold
     SELECT
         s.player_id,
-        s.player_name,
-        s.team_name,
+        MIN(s.player_name)                  AS player_name,
         p.position,
         s.league_id,
         s.season,
@@ -43,15 +42,15 @@ base AS (
         -- Recompute per-90 from summed totals (more accurate than averaging rates)
         ROUND(SUM(s.season_goals)   / NULLIF(SUM(s.total_minutes), 0) * 90, 4) AS goals_per_90,
         ROUND(SUM(s.season_assists) / NULLIF(SUM(s.total_minutes), 0) * 90, 4) AS assists_per_90,
-        AVG(s.duel_win_rate)                AS duel_win_rate,
-        AVG(s.dribble_success_rate)         AS dribble_success_rate,
-        AVG(s.shot_accuracy)                AS shot_accuracy
+        ROUND(SUM(s.season_duels_won) * 1.0 / NULLIF(SUM(s.season_duels), 0), 3) AS duel_win_rate,
+        ROUND(SUM(s.season_dribbles_success) * 1.0 / NULLIF(SUM(s.season_dribbles_attempted), 0), 3) AS dribble_success_rate,
+        ROUND(SUM(s.season_shots_on_target) * 1.0 / NULLIF(SUM(s.season_shots), 0), 3) AS shot_accuracy
     FROM {{ ref('gold_player_season_summary') }} s
     JOIN primary_position p
         ON  s.player_id = p.player_id
         AND s.league_id = p.league_id
         AND s.season    = p.season
-    GROUP BY s.player_id, s.player_name, s.team_name, p.position, s.league_id, s.season
+    GROUP BY s.player_id, p.position, s.league_id, s.season
     HAVING SUM(s.matches_played) >= 5
        AND SUM(s.total_minutes)  >= 300
 ),
@@ -74,7 +73,9 @@ normalized AS (
     -- This ensures all 6 archetypes compete on equal footing:
     -- a specialist who excels at one dimension beats a generalist
     -- who is mediocre across all dimensions.
-    -- p75 anchors (derived from population, hardcoded for stability):
+    -- p75 anchors are derived from the 2023/2024 season global population baseline.
+    -- These are hardcoded intentionally to provide a stable, comparable score
+    -- across different seasons and leagues without shifting the distribution bounds:
     --   poacher=7.84  | playmaker=13.11 | destroyer=17.70
     --   dribbler=5.95 | engine=25.70    | guardian=13.40
     SELECT
@@ -104,9 +105,9 @@ classified AS (
 )
 
 SELECT
+    player_id || '-' || league_id || '-' || season AS fingerprint_id,
     player_id,
     player_name,
-    team_name,
     position,
     league_id,
     season,

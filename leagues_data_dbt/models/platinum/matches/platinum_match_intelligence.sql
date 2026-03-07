@@ -27,7 +27,7 @@ WITH fixture_base AS (
             ELSE 'Draw'
         END                                                  AS actual_winner
     FROM {{ ref('gold_match_summary') }}
-    WHERE status_short = 'FT'
+    WHERE status_short IN ('FT', 'AET', 'PEN')
 ),
 
 team_stats AS (
