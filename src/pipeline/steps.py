@@ -7,7 +7,7 @@ from typing import Any
 from .api_client import ApiFootballClient
 from .config import PipelineConfig
 from .fetch import _build_marker_key, _call_api, _safe_fetch_and_upload, _upload_payload
-from .storage import S3Writer
+from .storage import StorageWriter
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ def _team_ids_from_teams_payload(payload: dict[str, Any]) -> list[int]:
 
 def _ingest_fixtures_baseline(
     client: ApiFootballClient,
-    s3: S3Writer,
+    writer: StorageWriter,
     summary: dict[str, int],
     part_counter: Any,
     config: PipelineConfig,
@@ -82,26 +82,26 @@ def _ingest_fixtures_baseline(
     """Fetch the full fixture list for the league season.
 
     Always calls the API — fixture IDs are needed for downstream steps.
-    Only writes to S3 when the marker is absent or force_refresh is set.
+    Only writes when the marker is absent or force_refresh is set.
 
     Returns (fixtures_payload, finished_fixture_ids).
     """
-    _idem, marker = _build_marker_key(s3, config, run_date, "/fixtures", "league_snapshot")
+    _idem, mk = _build_marker_key(config, run_date, "/fixtures", "league_snapshot")
     params = {"league": config.league_id, "season": config.season, "timezone": config.timezone}
-    marker_exists = s3.marker_exists(marker)
+    marker_exists = writer.marker_exists(mk)
 
     fixtures_payload = _call_api(client, summary, "/fixtures", params)
 
     if not marker_exists or force_refresh:
         _upload_payload(
-            s3=s3,
+            writer=writer,
             summary=summary,
             config=config,
             run_date=run_date,
             run_id=run_id,
             endpoint="/fixtures",
             entity_key="league_snapshot",
-            marker_key=marker,
+            marker_key=mk,
             part=next(part_counter),
             params=params,
             payload=fixtures_payload,
@@ -123,7 +123,7 @@ def _ingest_fixtures_baseline(
 
 def _ingest_teams_baseline(
     client: ApiFootballClient,
-    s3: S3Writer,
+    writer: StorageWriter,
     summary: dict[str, int],
     part_counter: Any,
     config: PipelineConfig,
@@ -134,26 +134,26 @@ def _ingest_teams_baseline(
     """Fetch the full team list for the league season.
 
     Always calls the API — team IDs are needed for downstream steps.
-    Only writes to S3 when the marker is absent or force_refresh is set.
+    Only writes when the marker is absent or force_refresh is set.
 
     Returns sorted list of team IDs.
     """
-    _idem, marker = _build_marker_key(s3, config, run_date, "/teams", "league_snapshot")
+    _idem, mk = _build_marker_key(config, run_date, "/teams", "league_snapshot")
     params = {"league": config.league_id, "season": config.season}
-    marker_exists = s3.marker_exists(marker)
+    marker_exists = writer.marker_exists(mk)
 
     teams_payload = _call_api(client, summary, "/teams", params)
 
     if not marker_exists or force_refresh:
         _upload_payload(
-            s3=s3,
+            writer=writer,
             summary=summary,
             config=config,
             run_date=run_date,
             run_id=run_id,
             endpoint="/teams",
             entity_key="league_snapshot",
-            marker_key=marker,
+            marker_key=mk,
             part=next(part_counter),
             params=params,
             payload=teams_payload,
@@ -172,7 +172,7 @@ def _ingest_teams_baseline(
 
 def _ingest_league_endpoints(
     client: ApiFootballClient,
-    s3: S3Writer,
+    writer: StorageWriter,
     summary: dict[str, int],
     part_counter: Any,
     config: PipelineConfig,
@@ -192,7 +192,7 @@ def _ingest_league_endpoints(
     for endpoint in league_calls:
         _safe_fetch_and_upload(
             client=client,
-            s3=s3,
+            writer=writer,
             summary=summary,
             part_counter=part_counter,
             config=config,
@@ -210,7 +210,7 @@ def _ingest_league_endpoints(
 
 def _ingest_paginated_league_players(
     client: ApiFootballClient,
-    s3: S3Writer,
+    writer: StorageWriter,
     summary: dict[str, int],
     part_counter: Any,
     config: PipelineConfig,
@@ -220,8 +220,8 @@ def _ingest_paginated_league_players(
     """Fetch all pages of player season stats for the league."""
     for page in range(1, config.players_max_pages + 1):
         entity_key = f"league_page={page}"
-        _idem, marker = _build_marker_key(s3, config, run_date, "/players", entity_key)
-        if s3.marker_exists(marker):
+        _idem, mk = _build_marker_key(config, run_date, "/players", entity_key)
+        if writer.marker_exists(mk):
             summary["skipped_idempotent"] += 1
             continue
 
@@ -235,14 +235,14 @@ def _ingest_paginated_league_players(
 
         summary["players_pages_fetched"] += 1
         _upload_payload(
-            s3=s3,
+            writer=writer,
             summary=summary,
             config=config,
             run_date=run_date,
             run_id=run_id,
             endpoint="/players",
             entity_key=entity_key,
-            marker_key=marker,
+            marker_key=mk,
             part=next(part_counter),
             params=params,
             payload=payload,
@@ -260,7 +260,7 @@ def _ingest_paginated_league_players(
 
 def _ingest_team_endpoints(
     client: ApiFootballClient,
-    s3: S3Writer,
+    writer: StorageWriter,
     summary: dict[str, int],
     part_counter: Any,
     config: PipelineConfig,
@@ -279,7 +279,7 @@ def _ingest_team_endpoints(
         for endpoint, params in team_calls:
             _safe_fetch_and_upload(
                 client=client,
-                s3=s3,
+                writer=writer,
                 summary=summary,
                 part_counter=part_counter,
                 config=config,
@@ -296,7 +296,7 @@ def _ingest_team_endpoints(
 
 def _ingest_team_deep_fixture_details(
     client: ApiFootballClient,
-    s3: S3Writer,
+    writer: StorageWriter,
     summary: dict[str, int],
     part_counter: Any,
     config: PipelineConfig,
@@ -310,10 +310,10 @@ def _ingest_team_deep_fixture_details(
     for fixture_id in fixture_ids:
         for endpoint in DETAIL_ENDPOINTS:
             entity_key = f"fixture={fixture_id}"
-            _idem, marker = _build_marker_key(
-                s3, config, run_date, endpoint, entity_key, include_run_date=False,
+            _idem, mk = _build_marker_key(
+                config, run_date, endpoint, entity_key, include_run_date=False,
             )
-            if s3.marker_exists(marker):
+            if writer.marker_exists(mk):
                 summary["skipped_idempotent"] += 1
                 continue
 
@@ -327,14 +327,14 @@ def _ingest_team_deep_fixture_details(
                 continue
 
             _upload_payload(
-                s3=s3,
+                writer=writer,
                 summary=summary,
                 config=config,
                 run_date=run_date,
                 run_id=run_id,
                 endpoint=endpoint,
                 entity_key=entity_key,
-                marker_key=marker,
+                marker_key=mk,
                 part=next(part_counter),
                 params=params,
                 payload=payload,

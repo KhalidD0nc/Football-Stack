@@ -6,7 +6,7 @@ from typing import Any
 
 from .api_client import ApiFootballClient
 from .config import PipelineConfig
-from .storage import S3Writer
+from .storage import StorageWriter, idempotency_key_from_parts, marker_key, marker_key_without_date
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,6 @@ def _utc_now_iso() -> str:
 
 
 def _build_marker_key(
-    s3: S3Writer,
     config: PipelineConfig,
     run_date: date,
     endpoint: str,
@@ -25,12 +24,12 @@ def _build_marker_key(
 ) -> tuple[str, str]:
     """Return (idempotency_hash, full_marker_key) for an endpoint+entity."""
     if include_run_date:
-        idem = s3.idempotency_key_from_parts(endpoint, entity_key, config.season, run_date.isoformat())
-        marker = s3.marker_key(config.league_id, config.season, endpoint, run_date, idem)
+        idem = idempotency_key_from_parts(endpoint, entity_key, config.season, run_date.isoformat())
+        mk = marker_key(config.league_id, config.season, endpoint, run_date, idem)
     else:
-        idem = s3.idempotency_key_from_parts(endpoint, entity_key, config.season)
-        marker = s3.marker_key_without_date(config.league_id, config.season, endpoint, idem)
-    return idem, marker
+        idem = idempotency_key_from_parts(endpoint, entity_key, config.season)
+        mk = marker_key_without_date(config.league_id, config.season, endpoint, idem)
+    return idem, mk
 
 
 def _call_api(
@@ -52,7 +51,7 @@ def _call_api(
 
 
 def _upload_payload(
-    s3: S3Writer,
+    writer: StorageWriter,
     summary: dict[str, int],
     config: PipelineConfig,
     run_date: date,
@@ -64,9 +63,9 @@ def _upload_payload(
     params: dict[str, Any],
     payload: dict[str, Any],
 ) -> None:
-    """Persist *payload* to S3 and write its idempotency marker.
+    """Persist *payload* and write its idempotency marker.
 
-    Callers MUST check ``s3.marker_exists`` **before** fetching data
+    Callers MUST check ``writer.marker_exists`` **before** fetching data
     and skip the entire fetch+upload if the marker already exists.
     This function always writes — it does not check markers itself.
     """
@@ -77,7 +76,7 @@ def _upload_payload(
         "fetched_at": _utc_now_iso(),
         "payload": payload,
     }
-    s3.put_raw(
+    writer.put_raw(
         league_id=config.league_id,
         season=config.season,
         endpoint=endpoint,
@@ -88,7 +87,7 @@ def _upload_payload(
     )
     summary["raw_files"] += 1
 
-    s3.put_marker(
+    writer.put_marker(
         marker_key,
         {
             "entity_key": entity_key,
@@ -102,7 +101,7 @@ def _upload_payload(
 
 def _safe_fetch_and_upload(
     client: ApiFootballClient,
-    s3: S3Writer,
+    writer: StorageWriter,
     summary: dict[str, int],
     part_counter: Any,
     config: PipelineConfig,
@@ -113,8 +112,8 @@ def _safe_fetch_and_upload(
     params: dict[str, Any],
     force_refresh: bool = False,
 ) -> None:
-    _idem, marker = _build_marker_key(s3, config, run_date, endpoint, entity_key)
-    if s3.marker_exists(marker) and not force_refresh:
+    _idem, mk = _build_marker_key(config, run_date, endpoint, entity_key)
+    if writer.marker_exists(mk) and not force_refresh:
         summary["skipped_idempotent"] += 1
         return
 
@@ -126,14 +125,14 @@ def _safe_fetch_and_upload(
         return
 
     _upload_payload(
-        s3=s3,
+        writer=writer,
         summary=summary,
         config=config,
         run_date=run_date,
         run_id=run_id,
         endpoint=endpoint,
         entity_key=entity_key,
-        marker_key=marker,
+        marker_key=mk,
         part=next(part_counter),
         params=params,
         payload=payload,

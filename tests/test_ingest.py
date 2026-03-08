@@ -1,21 +1,24 @@
-"""Unit tests for the three production-readiness fixes in the ingestion pipeline.
+"""Unit tests for the ingestion pipeline.
 
-Issue 1 (High):  Idempotency check happens BEFORE API fetch.
-Issue 2 (Medium): api_attempts tracks real HTTP attempts including retries.
-Issue 3 (Low):  detail_calls renamed to detail_writes.
+Covers:
+- Idempotency check happens BEFORE API fetch
+- api_attempts tracks real HTTP attempts including retries
+- detail_writes key in summary
+- LocalFileWriter round-trip
+- create_writer factory
 """
 
 from __future__ import annotations
 
+import json
 from datetime import date
 from itertools import count
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from src.pipeline.fetch import (
-    _build_marker_key,
     _call_api,
     _safe_fetch_and_upload,
 )
@@ -25,6 +28,12 @@ from src.pipeline.steps import (
     DETAIL_ENDPOINTS,
 )
 from src.pipeline.config import PipelineConfig
+from src.pipeline.storage import (
+    LocalFileWriter,
+    create_writer,
+    idempotency_key_from_parts,
+    marker_key_without_date,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -34,12 +43,11 @@ DUMMY_CONFIG = PipelineConfig(
     api_football_key="test-key",
     api_base_url="https://example.com",
     league_id=307,
-    team_id=2932,
     season=2025,
     timezone="UTC",
     players_max_pages=3,
-    aws_region="us-east-1",
-    s3_bucket="test-bucket",
+    storage_backend="local",
+    local_root="data_lake",
 )
 
 RUN_DATE = date(2025, 6, 1)
@@ -79,13 +87,10 @@ def _mock_client(total_attempts_delta: int = 1) -> MagicMock:
     return client
 
 
-def _mock_s3(marker_exists: bool = False) -> MagicMock:
-    s3 = MagicMock()
-    s3.marker_exists.return_value = marker_exists
-    s3.idempotency_key_from_parts.return_value = "idem-hash"
-    s3.marker_key.return_value = "state/marker.json"
-    s3.marker_key_without_date.return_value = "state/marker-no-date.json"
-    return s3
+def _mock_writer(marker_exists: bool = False) -> MagicMock:
+    writer = MagicMock()
+    writer.marker_exists.return_value = marker_exists
+    return writer
 
 
 # ===========================================================================
@@ -98,12 +103,12 @@ class TestIdempotencyBeforeFetch:
 
     def test_safe_fetch_skips_api_on_existing_marker(self) -> None:
         client = _mock_client()
-        s3 = _mock_s3(marker_exists=True)
+        writer = _mock_writer(marker_exists=True)
         summary = _fresh_summary()
 
         _safe_fetch_and_upload(
             client=client,
-            s3=s3,
+            writer=writer,
             summary=summary,
             part_counter=count(1),
             config=DUMMY_CONFIG,
@@ -117,17 +122,17 @@ class TestIdempotencyBeforeFetch:
         client.get.assert_not_called()
         assert summary["skipped_idempotent"] == 1
         assert summary["api_calls"] == 0
-        s3.put_raw.assert_not_called()
-        s3.put_marker.assert_not_called()
+        writer.put_raw.assert_not_called()
+        writer.put_marker.assert_not_called()
 
     def test_safe_fetch_proceeds_on_missing_marker(self) -> None:
         client = _mock_client()
-        s3 = _mock_s3(marker_exists=False)
+        writer = _mock_writer(marker_exists=False)
         summary = _fresh_summary()
 
         _safe_fetch_and_upload(
             client=client,
-            s3=s3,
+            writer=writer,
             summary=summary,
             part_counter=count(1),
             config=DUMMY_CONFIG,
@@ -141,17 +146,17 @@ class TestIdempotencyBeforeFetch:
         client.get.assert_called_once()
         assert summary["api_calls"] == 1
         assert summary["skipped_idempotent"] == 0
-        s3.put_raw.assert_called_once()
-        s3.put_marker.assert_called_once()
+        writer.put_raw.assert_called_once()
+        writer.put_marker.assert_called_once()
 
     def test_safe_fetch_force_refresh_ignores_existing_marker(self) -> None:
         client = _mock_client()
-        s3 = _mock_s3(marker_exists=True)
+        writer = _mock_writer(marker_exists=True)
         summary = _fresh_summary()
 
         _safe_fetch_and_upload(
             client=client,
-            s3=s3,
+            writer=writer,
             summary=summary,
             part_counter=count(1),
             config=DUMMY_CONFIG,
@@ -166,17 +171,17 @@ class TestIdempotencyBeforeFetch:
         client.get.assert_called_once()
         assert summary["api_calls"] == 1
         assert summary["skipped_idempotent"] == 0
-        s3.put_raw.assert_called_once()
-        s3.put_marker.assert_called_once()
+        writer.put_raw.assert_called_once()
+        writer.put_marker.assert_called_once()
 
     def test_paginated_players_skips_api_on_existing_marker(self) -> None:
         client = _mock_client()
-        s3 = _mock_s3(marker_exists=True)
+        writer = _mock_writer(marker_exists=True)
         summary = _fresh_summary()
 
         _ingest_paginated_league_players(
             client=client,
-            s3=s3,
+            writer=writer,
             summary=summary,
             part_counter=count(1),
             config=DUMMY_CONFIG,
@@ -191,13 +196,13 @@ class TestIdempotencyBeforeFetch:
 
     def test_deep_details_skips_api_on_existing_marker(self) -> None:
         client = _mock_client()
-        s3 = _mock_s3(marker_exists=True)
+        writer = _mock_writer(marker_exists=True)
         summary = _fresh_summary()
         fixture_ids = [101, 102]
 
         _ingest_team_deep_fixture_details(
             client=client,
-            s3=s3,
+            writer=writer,
             summary=summary,
             part_counter=count(1),
             config=DUMMY_CONFIG,
@@ -213,13 +218,13 @@ class TestIdempotencyBeforeFetch:
 
     def test_deep_details_fetches_on_missing_marker(self) -> None:
         client = _mock_client()
-        s3 = _mock_s3(marker_exists=False)
+        writer = _mock_writer(marker_exists=False)
         summary = _fresh_summary()
         fixture_ids = [101]
 
         _ingest_team_deep_fixture_details(
             client=client,
-            s3=s3,
+            writer=writer,
             summary=summary,
             part_counter=count(1),
             config=DUMMY_CONFIG,
@@ -295,13 +300,13 @@ class TestDetailWritesRename:
 
     def test_detail_writes_incremented_on_write(self) -> None:
         client = _mock_client()
-        s3 = _mock_s3(marker_exists=False)
+        writer = _mock_writer(marker_exists=False)
         summary = _fresh_summary()
         fixture_ids = [101]
 
         _ingest_team_deep_fixture_details(
             client=client,
-            s3=s3,
+            writer=writer,
             summary=summary,
             part_counter=count(1),
             config=DUMMY_CONFIG,
@@ -311,3 +316,85 @@ class TestDetailWritesRename:
         )
 
         assert summary["detail_writes"] == len(DETAIL_ENDPOINTS)
+
+
+# ===========================================================================
+# LocalFileWriter tests
+# ===========================================================================
+
+
+class TestLocalFileWriter:
+    def test_put_marker_and_marker_exists(self, tmp_path: Any) -> None:
+        writer = LocalFileWriter(root=tmp_path)
+        key = "state/test/marker.json"
+        body = {"status": "ok"}
+
+        assert not writer.marker_exists(key)
+        writer.put_marker(key, body)
+        assert writer.marker_exists(key)
+
+        content = json.loads((tmp_path / key).read_text())
+        assert content == body
+
+    def test_put_raw_creates_correct_path(self, tmp_path: Any) -> None:
+        writer = LocalFileWriter(root=tmp_path)
+        body = {"endpoint": "/fixtures", "payload": []}
+
+        key = writer.put_raw(
+            league_id=39,
+            season=2024,
+            endpoint="/fixtures",
+            dt=date(2025, 1, 15),
+            run_id="20250115T120000Z",
+            part=1,
+            body=body,
+        )
+
+        assert "league=39" in key
+        assert "season=2024" in key
+        assert "endpoint=fixtures" in key
+        assert "part-00001.json" in key
+        assert (tmp_path / key).exists()
+
+        content = json.loads((tmp_path / key).read_text())
+        assert content == body
+
+    def test_marker_round_trip_nested_endpoint(self, tmp_path: Any) -> None:
+        writer = LocalFileWriter(root=tmp_path)
+        idem = idempotency_key_from_parts("/fixtures/statistics", "fixture=101", 2024)
+        key = marker_key_without_date(39, 2024, "/fixtures/statistics", idem)
+
+        writer.put_marker(key, {"fixture_id": 101})
+        assert writer.marker_exists(key)
+
+
+# ===========================================================================
+# create_writer factory tests
+# ===========================================================================
+
+
+class TestCreateWriter:
+    def test_local_default(self) -> None:
+        writer = create_writer("local")
+        assert isinstance(writer, LocalFileWriter)
+
+    def test_local_custom_root(self, tmp_path: Any) -> None:
+        writer = create_writer("local", local_root=str(tmp_path / "custom"))
+        assert isinstance(writer, LocalFileWriter)
+        assert writer.root == tmp_path / "custom"
+
+    def test_s3_missing_bucket_raises(self) -> None:
+        with pytest.raises(ValueError, match="s3_bucket"):
+            create_writer("s3", aws_region="us-east-1")
+
+    def test_s3_missing_region_raises(self) -> None:
+        with pytest.raises(ValueError, match="aws_region"):
+            create_writer("s3", s3_bucket="my-bucket")
+
+    def test_gcs_missing_bucket_raises(self) -> None:
+        with pytest.raises(ValueError, match="gcs_bucket"):
+            create_writer("gcs")
+
+    def test_unknown_backend_raises(self) -> None:
+        with pytest.raises(ValueError, match="Unknown storage backend"):
+            create_writer("azure")

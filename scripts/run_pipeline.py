@@ -9,7 +9,7 @@ from datetime import date
 from pathlib import Path
 from time import perf_counter
 
-from src.pipeline.config import load_config, resolve_run_date, with_overrides
+from src.pipeline.config import load_configs_from_file, resolve_run_date, with_overrides
 from src.pipeline.ingest import run_ingestion
 
 
@@ -100,6 +100,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--date", dest="run_date", help="Run date in YYYY-MM-DD format.", default=None)
     parser.add_argument(
+        "--config",
+        dest="config_path",
+        help="Path to pipeline_config.json containing targets.",
+        default=None,
+    )
+    parser.add_argument(
         "--league-id",
         dest="league_id",
         type=_positive_int,
@@ -168,11 +174,18 @@ def main() -> None:
     )
 
     if not args.skip_ingestion:
-        base_config = load_config()
-        league_ids = args.league_ids or ([args.league_id] if args.league_id else [None])
-        for league_id in league_ids:
+        base_configs = load_configs_from_file(args.config_path)
+        configs_to_run = []
+        league_ids_override = args.league_ids or ([args.league_id] if args.league_id else [])
+        if league_ids_override:
+            for bc in base_configs:
+                for target_lid in league_ids_override:
+                    configs_to_run.append(with_overrides(bc, league_id=target_lid))
+        else:
+            configs_to_run = base_configs
+
+        for config in configs_to_run:
             step_start = perf_counter()
-            config = with_overrides(base_config, league_id=league_id)
             logger.info(
                 "Step start: ingestion (league_id=%s season=%s baseline_only=%s force_snapshot_refresh=%s)",
                 config.league_id,
