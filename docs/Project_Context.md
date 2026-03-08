@@ -64,11 +64,19 @@ API-Football (v3) → Python ETL → S3 (raw JSON) → Snowflake (COPY INTO) →
   - **Fixtures:** `gold_match_team_performance`
   - **Availability:** `gold_squad_availability`
 
-### 🔄 NEXT — Stage 5 - Data Observability & Agent Integration
+### ✅ DONE — Platinum Layer (AI Features)
 
-- Establish interfaces for AI coaching system.
+- Built 12 specialized models serving as a direct semantic layer for AI agents.
+- **Teams (5 models):** `platinum_team_attacking_style`, `platinum_team_defensive_consistency`, `platinum_team_discipline_risk`, `platinum_team_form_momentum`, `platinum_team_home_fortress`
+- **Players (5 models):** `platinum_player_duel_dominance`, `platinum_player_impact_score`, `platinum_player_per90_efficiency`, `platinum_player_performance_trend`, `platinum_player_style_fingerprint`
+- **Fixtures (1 model):** `platinum_match_intelligence`
+- **Predictions (1 model):** `platinum_prediction_accuracy`
+
+### 🔄 NEXT — Stage 6 - Productionization & CI/CD
+
 - Build test suites for freshness and volume anomalies.
 - Finalize CI/CD pipeline and automated data lineage tracking.
+- Orchestrate full incremental builds and automated recovery.
 
 ### ✅ LATEST IMPLEMENTATION UPDATE (February 25, 2026)
 
@@ -94,8 +102,12 @@ API-Football (v3) → Python ETL → S3 (raw JSON) → Snowflake (COPY INTO) →
   - Built out team profiles for performance, scoring, and discipline.
   - Built out player profiles for match performances and season summaries.
   - Created squad availability and match team performance summaries.
+- **Platinum Layer (AI Features) implemented**
+  - 12 new enriched models developed natively for an AI coaching agent.
+  - Included player archetypes, AI match narratives, team styles, and prediction model scoring.
 - **Critical Architectural Fixes Applied**
   - Added `league_id` and `season` to the `GROUP BY` logic and joins in Gold models (`gold_team_scoring_profile`, `gold_team_discipline_profile`, `gold_team_performance_summary`) to prevent aggregation bugs across multiple seasons.
+  - Handled NULL comparisons inside `platinum_prediction_accuracy` (draw fixtures avoiding logical propagation nullification).
   - Wrapped LEFT JOIN metrics in `COALESCE` to ensure 0s return instead of NULLs for missing data.
   - Renamed `gold_match_summary` to `gold_match_team_performance` to better reflect its 2-rows-per-fixture grain.
   - For `raw_fixtures_statistics` and `raw_fixtures_lineups`, `fixture_id` is extracted from `raw:params:fixture::INT` rather than `payload.response` due to inconsistent API payloads.

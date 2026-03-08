@@ -79,7 +79,7 @@ Exit criteria:
 - Staging quality checks pass (null keys, uniqueness, accepted values, key relationships).
 - Stage 3 evidence pack is published (row counts, duplicate checks, freshness snapshot).
 
-### Current Stage: Stage 4 - Gold Marts and Analytics (In Progress)
+### Stage 4 - Gold Marts and Analytics (Completed)
 Goal:
 - Build curated, business-level entities for analytics and downstream applications.
 
@@ -97,14 +97,33 @@ Exit criteria:
 - Gold models provide stable interfaces for the AI Coaching System.
 - Data lineage is fully documented and verifiable.
 
-### Next Stage: Stage 5 - Data Observability & Downstream Delivery
+### Current Stage: Stage 5 - Agent Integration & Data Observability
 Goal:
-- Finalize operational readiness and handoff interfaces to downstream applications (AI agent).
+- Build specialized Platinum-layer models to power AI coaching agent semantics.
+- Finalize operational readiness and handoff interfaces.
+
+Architecture focus:
+- Process Gold metrics into heavily enriched features (e.g. Archetype matching, Dominance, Match Intelligence).
+- Ensure models output natural language-like categorizations alongside hard facts.
+- Document and lock-in schemas for API integrations.
+
+Current Platinum models:
+- Teams (5): Attacking style, defensive consistency, discipline risk, form momentum, home fortress.
+- Players (5): Duel dominance, impact score, per-90 efficiency, performance trend, style fingerprint.
+- Matches/Predictions (2): Match intelligence, prediction accuracy.
+
+Exit criteria:
+- AI models are well-tested against edge cases (e.g., goalless draws).
+- AI interfaces seamlessly consume the structured responses.
+
+### Next Stage: Stage 6 - Productionization & CI/CD
+Goal:
+- Fully automate CI/CD pipeline, and ensure production reliability.
 
 Architecture focus:
 - Establish automated testing suites for data freshness and volume anomalies.
 - Prepare public dataset extraction patterns.
-- Ensure API integrations point to Gold layer robustly.
+- Ensure API integrations point to Platinum/Gold layers robustly.
 
 Exit criteria:
 - The data platform operates autonomously with high data trustworthiness.
