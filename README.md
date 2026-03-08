@@ -1,7 +1,7 @@
 # Leagues Data Project
 
 ## Scope
-This repository is for **Data Engineering only**. It focuses on the automated ingestion, storage, and transformation of football data (SPL/API-Football) into a queryable data lake.
+This repository is for **Data Engineering only**. It focuses on the automated ingestion, storage, and transformation of football league data (via API-Football) into a queryable data lake. It supports any league available on API-Football — no hardcoded league defaults.
 
 ## Stage Tracker
 We keep only two active stage labels:
@@ -51,7 +51,8 @@ Transition rule (must be followed every stage):
 
 ### Ingestion (Bronze Layer)
 - **Coverage**: Full league baseline (fixtures, teams, standings, rounds) and deep details (statistics, events, lineups, players, predictions, injuries, transfers).
-- **Idempotency**: All ingestion steps use S3 marker files to prevent duplicate API calls and ensure safe re-runs.
+- **Multi-Provider Storage**: Pluggable storage backends — **local filesystem** (default, zero cloud deps), **AWS S3**, or **Google Cloud Storage**. Controlled via `STORAGE_BACKEND` env var or config file.
+- **Idempotency**: All ingestion steps use marker files to prevent duplicate API calls and ensure safe re-runs.
 - **Resilience**: API client includes exponential backoff retry logic and rate limiting.
 - **Paginated Ingestion**: Optimized handling for large datasets like league-wide player lists.
 
@@ -76,10 +77,26 @@ Transition rule (must be followed every stage):
    pip install -r requirements.txt
    ```
 
-2. **Configuration**: Copy the example environment file and fill in your credentials (API-Football key, AWS credentials for S3).
+2. **Configuration**: Copy the example environment file and fill in your credentials.
    ```bash
    cp .env.example .env
    ```
+   At minimum you need `API_FOOTBALL_KEY`, `LEAGUE_ID`, and `SEASON`. Storage defaults to local filesystem (`data_lake/` directory) — no cloud credentials required to get started.
+
+3. **Multi-League Config** (optional): For multi-league, multi-season runs, copy and edit the JSON config:
+   ```bash
+   cp pipeline_config.json.example pipeline_config.json
+   ```
+
+### Storage Backends
+
+| Backend | `STORAGE_BACKEND` | Required vars | Extra dependency |
+|---|---|---|---|
+| Local filesystem (default) | `local` | `LOCAL_ROOT` (default `data_lake`) | None |
+| AWS S3 | `s3` | `S3_BUCKET`, `AWS_REGION`, AWS credentials | `boto3` |
+| Google Cloud Storage | `gcs` | `GCS_BUCKET`, optionally `GCS_PROJECT` | `google-cloud-storage` |
+
+Backward compat: if `STORAGE_BACKEND` is unset but `S3_BUCKET` is set, the backend is inferred as `s3`.
 
 ## Quick Start
 
@@ -123,6 +140,18 @@ python -m scripts.run_pipeline --league-id 39
 python -m scripts.run_pipeline --league-id 307
 ```
 
+Multi-league run from a JSON config file:
+
+```bash
+python -m scripts.run_pipeline --config pipeline_config.json
+```
+
+**Ingestion-only mode** (local storage users, skip Snowflake/dbt):
+
+```bash
+python -m scripts.run_pipeline --skip-raw-sync --skip-dbt-build
+```
+
 If you need to resync pending RAW files across all dates (no `dt` filter):
 
 ```bash
@@ -141,9 +170,9 @@ For a low-cost same-day refresh (baseline endpoints only):
 python -m scripts.run_pipeline --force-league-snapshot-refresh --baseline-only
 ```
 
-What this command does:
-- Runs API-Football ingestion to S3 (`scripts.run_daily` logic).
-- Runs dbt macro `sync_raw_from_s3` to load new S3 files into `LEAGUES_DATA.RAW.*`.
+What the full pipeline does:
+- Runs API-Football ingestion to the configured storage backend.
+- Runs dbt macro `sync_raw_from_s3` to load S3 files into `LEAGUES_DATA.RAW.*` (S3 backend only).
 - Runs `dbt build --select staging silver gold` (models + tests).
 
 Season selection note:
@@ -152,7 +181,7 @@ Season selection note:
 If you want it fully unattended on one machine, schedule it with `cron`:
 
 ```bash
-15 3 * * * cd /Users/khalidr/Desktop/Leagues_Data_Project && /bin/zsh -lc 'source .venv/bin/activate && python -m scripts.run_pipeline >> logs/pipeline.log 2>&1'
+15 3 * * * cd /path/to/Leagues_Data_Project && /bin/zsh -lc 'source .venv/bin/activate && python -m scripts.run_pipeline >> logs/pipeline.log 2>&1'
 ```
 
 ### dbt Transformations
