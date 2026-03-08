@@ -10,12 +10,16 @@ def _base_config() -> PipelineConfig:
         api_football_key="test-key",
         api_base_url="https://example.com",
         league_id=307,
-        team_id=2932,
         season=2025,
         timezone="UTC",
         players_max_pages=200,
+        team_id=2932,
+        storage_backend="s3",
+        local_root="data_lake",
         aws_region="us-east-1",
         s3_bucket="bucket",
+        gcs_bucket=None,
+        gcs_project=None,
     )
 
 

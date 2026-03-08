@@ -71,14 +71,14 @@ def test_build_dbt_raw_sync_cmd_contains_serialized_macro_args() -> None:
         macro_args=macro_args,
     )
 
-    assert cmd[:11] == [
+    assert cmd[:8] == [
         "dbt",
         "run-operation",
         "sync_raw_from_s3",
         "--project-dir",
-        "/tmp/project",
+        str(Path("/tmp/project")),
         "--profiles-dir",
-        "/tmp/profiles",
+        str(Path("/tmp/profiles")),
         "--args",
     ]
     args_index = cmd.index("--args") + 1
