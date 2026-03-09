@@ -21,3 +21,4 @@ leagues_data_dbt/profiles.yml
 
 # OS
 .DS_Store
+sql/snowflake_ddl_local.sql
