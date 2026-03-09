@@ -1,0 +1,21 @@
+{
+  "settings": {
+    "api_base_url": "https://v3.football.api-sports.io",
+    "timezone": "Asia/Riyadh",
+    "players_max_pages": 200,
+    "storage": {
+      "backend": "local",
+      "local_root": "data_lake"
+    }
+  },
+  "targets": [
+    {
+      "league_id": 307,
+      "seasons": [2024]
+    },
+    {
+      "league_id": 39,
+      "seasons": [2023, 2024]
+    }
+  ]
+}

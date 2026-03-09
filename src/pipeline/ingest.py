@@ -14,7 +14,7 @@ from .steps import (
     _ingest_team_endpoints,
     _ingest_team_deep_fixture_details,
 )
-from .storage import S3Writer, generate_run_id
+from .storage import create_writer, generate_run_id
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,14 @@ def run_ingestion(
     baseline_only: bool = False,
 ) -> dict[str, int]:
     client = ApiFootballClient(config.api_base_url, config.api_football_key)
-    s3 = S3Writer(config.s3_bucket, config.aws_region)
+    writer = create_writer(
+        config.storage_backend,
+        local_root=config.local_root,
+        s3_bucket=config.s3_bucket,
+        aws_region=config.aws_region,
+        gcs_bucket=config.gcs_bucket,
+        gcs_project=config.gcs_project,
+    )
     run_id = generate_run_id()
     part_counter = count(1)
 
@@ -48,21 +55,21 @@ def run_ingestion(
 
     # Step 1: Fetch all fixtures — IDs needed as input to step 6
     _fixtures_payload, finished_fixture_ids = _ingest_fixtures_baseline(
-        client=client, s3=s3, summary=summary, part_counter=part_counter,
+        client=client, writer=writer, summary=summary, part_counter=part_counter,
         config=config, run_date=run_date, run_id=run_id,
         force_refresh=force_league_snapshot_refresh,
     )
 
     # Step 2: Fetch all teams — IDs needed as input to step 5
     team_ids = _ingest_teams_baseline(
-        client=client, s3=s3, summary=summary, part_counter=part_counter,
+        client=client, writer=writer, summary=summary, part_counter=part_counter,
         config=config, run_date=run_date, run_id=run_id,
         force_refresh=force_league_snapshot_refresh,
     )
 
     # Step 3: League-level snapshots (standings, rounds, leaderboards)
     _ingest_league_endpoints(
-        client=client, s3=s3, summary=summary, part_counter=part_counter,
+        client=client, writer=writer, summary=summary, part_counter=part_counter,
         config=config, run_date=run_date, run_id=run_id,
         force_refresh=force_league_snapshot_refresh,
     )
@@ -74,20 +81,20 @@ def run_ingestion(
 
     # Step 4: All player season stats (paginated)
     _ingest_paginated_league_players(
-        client=client, s3=s3, summary=summary, part_counter=part_counter,
+        client=client, writer=writer, summary=summary, part_counter=part_counter,
         config=config, run_date=run_date, run_id=run_id,
     )
 
     # Step 5: Per-team endpoints (stats, injuries, transfers, squads)
     _ingest_team_endpoints(
-        client=client, s3=s3, summary=summary, part_counter=part_counter,
+        client=client, writer=writer, summary=summary, part_counter=part_counter,
         config=config, run_date=run_date, run_id=run_id,
         team_ids=team_ids,
     )
 
     # Step 6: Per-fixture details for all finished fixtures
     _ingest_team_deep_fixture_details(
-        client=client, s3=s3, summary=summary, part_counter=part_counter,
+        client=client, writer=writer, summary=summary, part_counter=part_counter,
         config=config, run_date=run_date, run_id=run_id,
         fixture_ids=finished_fixture_ids,
     )
