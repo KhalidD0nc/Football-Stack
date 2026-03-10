@@ -38,8 +38,9 @@ def _infer_backend() -> str:
     explicit = os.getenv("STORAGE_BACKEND", "").strip().lower()
     if explicit:
         return explicit
-    # If S3_BUCKET is set but STORAGE_BACKEND is not, infer s3
-    if os.getenv("S3_BUCKET", "").strip():
+    if os.getenv("GCS_BUCKET", os.getenv("GCP_BUCKET_TEST", "")).strip():
+        return "gcs"
+    if os.getenv("S3_BUCKET", os.getenv("S3_BUCKET_TEST", "")).strip():
         return "s3"
     return "local"
 
@@ -61,7 +62,7 @@ def load_config() -> PipelineConfig:
         local_root=os.getenv("LOCAL_ROOT", "data_lake"),
         aws_region=os.getenv("AWS_REGION", "us-east-1") if backend == "s3" else os.getenv("AWS_REGION"),
         s3_bucket=os.getenv("S3_BUCKET") if backend == "s3" else os.getenv("S3_BUCKET"),
-        gcs_bucket=os.getenv("GCS_BUCKET"),
+        gcs_bucket=os.getenv("GCS_BUCKET", os.getenv("GCP_BUCKET_TEST")),
         gcs_project=os.getenv("GCS_PROJECT"),
     )
 
@@ -92,12 +93,14 @@ def load_configs_from_file(config_path: str | Path | None) -> list[PipelineConfi
     s3_bucket = storage_cfg.get("s3_bucket", settings.get("s3_bucket", os.getenv("S3_BUCKET", ""))).strip() or None
     aws_region = storage_cfg.get("aws_region", settings.get("aws_region", os.getenv("AWS_REGION", ""))).strip() or None
     local_root = storage_cfg.get("local_root", os.getenv("LOCAL_ROOT", "data_lake"))
-    gcs_bucket = storage_cfg.get("gcs_bucket", os.getenv("GCS_BUCKET", "")).strip() or None
+    gcs_bucket = storage_cfg.get("gcs_bucket", settings.get("gcs_bucket", os.getenv("GCS_BUCKET", os.getenv("GCP_BUCKET_TEST", "")))).strip() or None
     gcs_project = storage_cfg.get("gcs_project", os.getenv("GCS_PROJECT")) or None
 
     # Infer backend if not explicit
     if backend_raw:
         backend = backend_raw
+    elif gcs_bucket:
+        backend = "gcs"
     elif s3_bucket:
         backend = "s3"
     else:

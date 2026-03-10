@@ -19,11 +19,14 @@ from .storage import create_writer, generate_run_id
 logger = logging.getLogger(__name__)
 
 
+from dataclasses import replace
+
 def run_ingestion(
     config: PipelineConfig,
     run_date: date,
     force_league_snapshot_refresh: bool = False,
     baseline_only: bool = False,
+    dev_limit: int | None = None,
 ) -> dict[str, int]:
     client = ApiFootballClient(config.api_base_url, config.api_football_key)
     writer = create_writer(
@@ -66,6 +69,12 @@ def run_ingestion(
         config=config, run_date=run_date, run_id=run_id,
         force_refresh=force_league_snapshot_refresh,
     )
+
+    if dev_limit is not None:
+        logger.info(f"Dev limit active: truncating data requests to {dev_limit} items.")
+        finished_fixture_ids = finished_fixture_ids[:dev_limit]
+        team_ids = team_ids[:dev_limit]
+        config = replace(config, players_max_pages=min(config.players_max_pages, dev_limit))
 
     # Step 3: League-level snapshots (standings, rounds, leaderboards)
     _ingest_league_endpoints(

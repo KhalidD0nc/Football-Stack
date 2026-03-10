@@ -45,6 +45,23 @@ def build_raw_sync_macro_args(
     return macro_args
 
 
+def build_curated_sync_macro_args(
+    run_date: date | None,
+    curated_database: str | None,
+    curated_schema: str,
+    stage_name: str,
+) -> dict[str, str]:
+    macro_args: dict[str, str] = {
+        "curated_schema": curated_schema,
+        "stage_name": stage_name,
+    }
+    if run_date is not None:
+        macro_args["run_date"] = run_date.isoformat()
+    if curated_database:
+        macro_args["curated_database"] = curated_database
+    return macro_args
+
+
 def build_dbt_raw_sync_cmd(
     project_dir: Path,
     profiles_dir: Path,
@@ -63,12 +80,31 @@ def build_dbt_raw_sync_cmd(
     ]
 
 
+def build_dbt_curated_sync_cmd(
+    project_dir: Path,
+    profiles_dir: Path,
+    macro_args: dict[str, str],
+) -> list[str]:
+    return [
+        "dbt",
+        "run-operation",
+        "sync_curated_from_s3",
+        "--project-dir",
+        str(project_dir),
+        "--profiles-dir",
+        str(profiles_dir),
+        "--args",
+        json.dumps(macro_args),
+    ]
+
+
 def build_dbt_build_cmd(
     project_dir: Path,
     profiles_dir: Path,
     selectors: list[str],
+    dbt_vars: dict[str, object] | None = None,
 ) -> list[str]:
-    return [
+    cmd = [
         "dbt",
         "build",
         "--project-dir",
@@ -79,6 +115,9 @@ def build_dbt_build_cmd(
         "--select",
         *selectors,
     ]
+    if dbt_vars:
+        cmd.extend(["--vars", json.dumps(dbt_vars)])
+    return cmd
 
 
 def _run_command(command: list[str], dry_run: bool, step_name: str) -> None:
@@ -148,8 +187,23 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Ingestion mode: only refresh league-level baseline endpoints (minimal API calls).",
     )
+    parser.add_argument(
+        "--dev-limit",
+        dest="dev_limit",
+        type=_positive_int,
+        default=None,
+        help="Fast testing mode: max teams/fixtures/pages to fetch (e.g. 2).",
+    )
     parser.add_argument("--skip-flatten", action="store_true", help="Skip JSON-to-Parquet flatten step.")
     parser.add_argument("--skip-raw-sync", action="store_true", help="Skip Snowflake RAW COPY INTO step.")
+    parser.add_argument("--skip-curated-sync", action="store_true", help="Skip Snowflake CURATED COPY INTO step.")
+    parser.add_argument(
+        "--use-curated-parquet",
+        action="store_true",
+        help="Enable curated Parquet path: run curated sync and pass use_curated_parquet=true to dbt.",
+    )
+    parser.add_argument("--curated-database", default=None, help="Snowflake database for CURATED tables.")
+    parser.add_argument("--curated-schema", default="CURATED", help="Snowflake schema for CURATED tables.")
     parser.add_argument("--skip-dbt-build", action="store_true", help="Skip dbt build step.")
     parser.add_argument(
         "--raw-sync-all-dates",
@@ -190,17 +244,19 @@ def main() -> None:
         for config in configs_to_run:
             step_start = perf_counter()
             logger.info(
-                "Step start: ingestion (league_id=%s season=%s baseline_only=%s force_snapshot_refresh=%s)",
+                "Step start: ingestion (league_id=%s season=%s baseline_only=%s force_snapshot_refresh=%s dev_limit=%s)",
                 config.league_id,
                 config.season,
                 args.baseline_only,
                 args.force_league_snapshot_refresh,
+                args.dev_limit,
             )
             summary = run_ingestion(
                 config,
                 run_date,
                 force_league_snapshot_refresh=args.force_league_snapshot_refresh,
                 baseline_only=args.baseline_only,
+                dev_limit=args.dev_limit,
             )
             logger.info("Step complete: ingestion league_id=%s in %.2fs", config.league_id, perf_counter() - step_start)
             logger.info("Ingestion complete league_id=%s for %s: %s", config.league_id, run_date.isoformat(), summary)
@@ -236,7 +292,7 @@ def main() -> None:
     else:
         logger.info("Skipping flatten step")
 
-    should_run_dbt = not (args.skip_raw_sync and args.skip_dbt_build)
+    should_run_dbt = not (args.skip_raw_sync and args.skip_dbt_build and (not args.use_curated_parquet or args.skip_curated_sync))
     if should_run_dbt and not args.dry_run and shutil.which("dbt") is None:
         raise RuntimeError("dbt CLI is not installed. Install dbt before running RAW sync/build steps.")
 
@@ -257,11 +313,32 @@ def main() -> None:
     else:
         logger.info("Skipping RAW sync step")
 
+    if args.use_curated_parquet and not args.skip_curated_sync:
+        curated_sync_date = None if args.raw_sync_all_dates else run_date
+        curated_macro_args = build_curated_sync_macro_args(
+            run_date=curated_sync_date,
+            curated_database=args.curated_database,
+            curated_schema=args.curated_schema,
+            stage_name=args.stage_name,
+        )
+        curated_sync_cmd = build_dbt_curated_sync_cmd(
+            project_dir=project_dir,
+            profiles_dir=profiles_dir,
+            macro_args=curated_macro_args,
+        )
+        _run_command(curated_sync_cmd, dry_run=args.dry_run, step_name="curated_sync")
+    elif args.use_curated_parquet:
+        logger.info("Skipping CURATED sync step")
+
     if not args.skip_dbt_build:
+        dbt_vars = None
+        if args.use_curated_parquet:
+            dbt_vars = {"use_curated_parquet": True}
         dbt_build_cmd = build_dbt_build_cmd(
             project_dir=project_dir,
             profiles_dir=profiles_dir,
             selectors=args.select,
+            dbt_vars=dbt_vars,
         )
         _run_command(dbt_build_cmd, dry_run=args.dry_run, step_name="dbt_build")
     else:
