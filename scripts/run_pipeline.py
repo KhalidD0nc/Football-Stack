@@ -10,7 +10,9 @@ from pathlib import Path
 from time import perf_counter
 
 from src.pipeline.config import load_configs_from_file, resolve_run_date, with_overrides
+from src.pipeline.flatten import run_flatten
 from src.pipeline.ingest import run_ingestion
+from src.pipeline.storage import create_writer, generate_run_id
 
 
 logger = logging.getLogger(__name__)
@@ -146,6 +148,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Ingestion mode: only refresh league-level baseline endpoints (minimal API calls).",
     )
+    parser.add_argument("--skip-flatten", action="store_true", help="Skip JSON-to-Parquet flatten step.")
     parser.add_argument("--skip-raw-sync", action="store_true", help="Skip Snowflake RAW COPY INTO step.")
     parser.add_argument("--skip-dbt-build", action="store_true", help="Skip dbt build step.")
     parser.add_argument(
@@ -203,6 +206,35 @@ def main() -> None:
             logger.info("Ingestion complete league_id=%s for %s: %s", config.league_id, run_date.isoformat(), summary)
     else:
         logger.info("Skipping ingestion step")
+
+    if not args.skip_flatten:
+        base_configs = load_configs_from_file(args.config_path)
+        flatten_configs = []
+        league_ids_override = args.league_ids or ([args.league_id] if args.league_id else [])
+        if league_ids_override:
+            for bc in base_configs:
+                for target_lid in league_ids_override:
+                    flatten_configs.append(with_overrides(bc, league_id=target_lid))
+        else:
+            flatten_configs = base_configs
+
+        flatten_run_id = generate_run_id()
+        for config in flatten_configs:
+            step_start = perf_counter()
+            logger.info("Step start: flatten (league_id=%s season=%s)", config.league_id, config.season)
+            writer = create_writer(
+                config.storage_backend,
+                local_root=config.local_root,
+                s3_bucket=config.s3_bucket,
+                aws_region=config.aws_region,
+                gcs_bucket=config.gcs_bucket,
+                gcs_project=config.gcs_project,
+            )
+            flatten_summary = run_flatten(writer, config.league_id, config.season, run_date, flatten_run_id)
+            logger.info("Step complete: flatten league_id=%s in %.2fs", config.league_id, perf_counter() - step_start)
+            logger.info("Flatten summary league_id=%s: %s", config.league_id, flatten_summary)
+    else:
+        logger.info("Skipping flatten step")
 
     should_run_dbt = not (args.skip_raw_sync and args.skip_dbt_build)
     if should_run_dbt and not args.dry_run and shutil.which("dbt") is None:
