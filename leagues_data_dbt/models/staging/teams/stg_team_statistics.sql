@@ -1,5 +1,11 @@
 {{ config(materialized='table') }}
 
+{% if var('use_curated_parquet', false) %}
+
+select * from {{ source('curated', 'team_statistics') }}
+
+{% else %}
+
 with source_dedup as (
     select
         raw,
@@ -127,3 +133,5 @@ select
     run_id,
     _loaded_at
 from extracted
+
+{% endif %}

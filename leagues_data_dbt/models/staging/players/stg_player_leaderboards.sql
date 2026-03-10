@@ -1,5 +1,11 @@
 {{ config(materialized='table') }}
 
+{% if var('use_curated_parquet', false) %}
+
+select * from {{ source('curated', 'player_leaderboards') }}
+
+{% else %}
+
 with top_scorers_source as (
     select
         raw,
@@ -218,3 +224,5 @@ select
     run_id,
     _loaded_at
 from final
+
+{% endif %}
