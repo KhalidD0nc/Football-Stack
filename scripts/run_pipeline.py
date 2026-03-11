@@ -3,14 +3,19 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import shutil
 import subprocess
+import sys
 from datetime import date
 from pathlib import Path
 from time import perf_counter
 
+# Ensure "src" is discoverable regardless of how the script is executed
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from src.pipeline.config import load_configs_from_file, resolve_run_date, with_overrides
-from src.pipeline.flatten import run_flatten
+from src.pipeline.flatten import normalize_warehouse_uri, run_flatten
 from src.pipeline.ingest import run_ingestion
 from src.pipeline.storage import create_writer, generate_run_id
 
@@ -28,81 +33,11 @@ def _positive_int(value: str) -> int:
     return parsed
 
 
-def build_raw_sync_macro_args(
-    run_date: date | None,
-    raw_database: str | None,
-    raw_schema: str,
-    stage_name: str,
-) -> dict[str, str]:
-    macro_args: dict[str, str] = {
-        "raw_schema": raw_schema,
-        "stage_name": stage_name,
-    }
-    if run_date is not None:
-        macro_args["run_date"] = run_date.isoformat()
-    if raw_database:
-        macro_args["raw_database"] = raw_database
-    return macro_args
-
-
-def build_curated_sync_macro_args(
-    run_date: date | None,
-    curated_database: str | None,
-    curated_schema: str,
-    stage_name: str,
-) -> dict[str, str]:
-    macro_args: dict[str, str] = {
-        "curated_schema": curated_schema,
-        "stage_name": stage_name,
-    }
-    if run_date is not None:
-        macro_args["run_date"] = run_date.isoformat()
-    if curated_database:
-        macro_args["curated_database"] = curated_database
-    return macro_args
-
-
-def build_dbt_raw_sync_cmd(
-    project_dir: Path,
-    profiles_dir: Path,
-    macro_args: dict[str, str],
-) -> list[str]:
-    return [
-        "dbt",
-        "run-operation",
-        "sync_raw_from_s3",
-        "--project-dir",
-        str(project_dir),
-        "--profiles-dir",
-        str(profiles_dir),
-        "--args",
-        json.dumps(macro_args),
-    ]
-
-
-def build_dbt_curated_sync_cmd(
-    project_dir: Path,
-    profiles_dir: Path,
-    macro_args: dict[str, str],
-) -> list[str]:
-    return [
-        "dbt",
-        "run-operation",
-        "sync_curated_from_s3",
-        "--project-dir",
-        str(project_dir),
-        "--profiles-dir",
-        str(profiles_dir),
-        "--args",
-        json.dumps(macro_args),
-    ]
-
-
 def build_dbt_build_cmd(
     project_dir: Path,
     profiles_dir: Path,
     selectors: list[str],
-    dbt_vars: dict[str, object] | None = None,
+    target: str | None = None,
 ) -> list[str]:
     cmd = [
         "dbt",
@@ -115,9 +50,26 @@ def build_dbt_build_cmd(
         "--select",
         *selectors,
     ]
-    if dbt_vars:
-        cmd.extend(["--vars", json.dumps(dbt_vars)])
+    if target:
+        cmd.extend(["--target", target])
     return cmd
+
+
+def _resolve_warehouse_uri(uri: str | None, *, is_test: bool) -> str | None:
+    base_database = os.getenv("SNOWFLAKE_DATABASE", "").strip()
+    if is_test:
+        default_database = os.getenv("SNOWFLAKE_DATABASE_TEST", "").strip()
+        if not default_database and base_database:
+            default_database = f"{base_database}_TEST"
+    else:
+        default_database = base_database
+
+    default_schema = os.getenv("SNOWFLAKE_SCHEMA", "").strip() or "STAGING"
+    return normalize_warehouse_uri(
+        uri,
+        default_database=default_database or None,
+        default_schema=default_schema,
+    )
 
 
 def _run_command(command: list[str], dry_run: bool, step_name: str) -> None:
@@ -163,18 +115,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--project-dir", default="leagues_data_dbt", help="dbt project directory.")
     parser.add_argument("--profiles-dir", default="leagues_data_dbt", help="dbt profiles directory.")
-    parser.add_argument(
-        "--raw-database",
-        default=None,
-        help="Snowflake database for RAW tables (defaults to dbt target database).",
-    )
-    parser.add_argument("--raw-schema", default="RAW", help="Snowflake schema for RAW tables.")
-    parser.add_argument("--stage-name", default="LEAGUES_STAGE", help="Snowflake stage name for S3 raw files.")
+
     parser.add_argument(
         "--select",
         nargs="+",
-        default=["staging", "silver", "gold"],
-        help="dbt selectors to build after RAW sync.",
+        default=["staging", "silver", "gold", "platinum"],
+        help="dbt selectors to build.",
     )
     parser.add_argument("--skip-ingestion", action="store_true", help="Skip API -> S3 ingestion step.")
     parser.add_argument(
@@ -195,21 +141,8 @@ def parse_args() -> argparse.Namespace:
         help="Fast testing mode: max teams/fixtures/pages to fetch (e.g. 2).",
     )
     parser.add_argument("--skip-flatten", action="store_true", help="Skip JSON-to-Parquet flatten step.")
-    parser.add_argument("--skip-raw-sync", action="store_true", help="Skip Snowflake RAW COPY INTO step.")
-    parser.add_argument("--skip-curated-sync", action="store_true", help="Skip Snowflake CURATED COPY INTO step.")
-    parser.add_argument(
-        "--use-curated-parquet",
-        action="store_true",
-        help="Enable curated Parquet path: run curated sync and pass use_curated_parquet=true to dbt.",
-    )
-    parser.add_argument("--curated-database", default=None, help="Snowflake database for CURATED tables.")
-    parser.add_argument("--curated-schema", default="CURATED", help="Snowflake schema for CURATED tables.")
     parser.add_argument("--skip-dbt-build", action="store_true", help="Skip dbt build step.")
-    parser.add_argument(
-        "--raw-sync-all-dates",
-        action="store_true",
-        help="Load RAW files without filtering on run date.",
-    )
+
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing dbt commands.")
     return parser.parse_args()
 
@@ -221,11 +154,10 @@ def main() -> None:
     project_dir = Path(args.project_dir).resolve()
     profiles_dir = Path(args.profiles_dir).resolve()
     logger.info(
-        "Pipeline start run_date=%s league_id_override=%s skip_ingestion=%s skip_raw_sync=%s skip_dbt_build=%s dry_run=%s",
+        "Pipeline start run_date=%s league_id_override=%s skip_ingestion=%s skip_dbt_build=%s dry_run=%s",
         run_date.isoformat(),
         args.league_id,
         args.skip_ingestion,
-        args.skip_raw_sync,
         args.skip_dbt_build,
         args.dry_run,
     )
@@ -237,9 +169,9 @@ def main() -> None:
         if league_ids_override:
             for bc in base_configs:
                 for target_lid in league_ids_override:
-                    configs_to_run.append(with_overrides(bc, league_id=target_lid))
+                    configs_to_run.append(with_overrides(bc, league_id=target_lid, dev_limit=args.dev_limit))
         else:
-            configs_to_run = base_configs
+            configs_to_run = [with_overrides(bc, dev_limit=args.dev_limit) for bc in base_configs]
 
         for config in configs_to_run:
             step_start = perf_counter()
@@ -270,9 +202,9 @@ def main() -> None:
         if league_ids_override:
             for bc in base_configs:
                 for target_lid in league_ids_override:
-                    flatten_configs.append(with_overrides(bc, league_id=target_lid))
+                    flatten_configs.append(with_overrides(bc, league_id=target_lid, dev_limit=args.dev_limit))
         else:
-            flatten_configs = base_configs
+            flatten_configs = [with_overrides(bc, dev_limit=args.dev_limit) for bc in base_configs]
 
         flatten_run_id = generate_run_id()
         for config in flatten_configs:
@@ -286,59 +218,33 @@ def main() -> None:
                 gcs_bucket=config.gcs_bucket,
                 gcs_project=config.gcs_project,
             )
-            flatten_summary = run_flatten(writer, config.league_id, config.season, run_date, flatten_run_id)
+            
+            uri = config.warehouse_uri_test if args.dev_limit else config.warehouse_uri
+            uri = _resolve_warehouse_uri(uri, is_test=bool(args.dev_limit))
+            flatten_summary = run_flatten(
+                writer,
+                config.league_id,
+                config.season,
+                run_date,
+                flatten_run_id,
+                warehouse_uri=uri,
+            )
             logger.info("Step complete: flatten league_id=%s in %.2fs", config.league_id, perf_counter() - step_start)
             logger.info("Flatten summary league_id=%s: %s", config.league_id, flatten_summary)
     else:
         logger.info("Skipping flatten step")
 
-    should_run_dbt = not (args.skip_raw_sync and args.skip_dbt_build and (not args.use_curated_parquet or args.skip_curated_sync))
-    if should_run_dbt and not args.dry_run and shutil.which("dbt") is None:
-        raise RuntimeError("dbt CLI is not installed. Install dbt before running RAW sync/build steps.")
+    if not args.skip_dbt_build and not args.dry_run and shutil.which("dbt") is None:
+        raise RuntimeError("dbt CLI is not installed. Install dbt before running build steps.")
 
-    if not args.skip_raw_sync:
-        raw_sync_date = None if args.raw_sync_all_dates else run_date
-        macro_args = build_raw_sync_macro_args(
-            run_date=raw_sync_date,
-            raw_database=args.raw_database,
-            raw_schema=args.raw_schema,
-            stage_name=args.stage_name,
-        )
-        raw_sync_cmd = build_dbt_raw_sync_cmd(
-            project_dir=project_dir,
-            profiles_dir=profiles_dir,
-            macro_args=macro_args,
-        )
-        _run_command(raw_sync_cmd, dry_run=args.dry_run, step_name="raw_sync")
-    else:
-        logger.info("Skipping RAW sync step")
-
-    if args.use_curated_parquet and not args.skip_curated_sync:
-        curated_sync_date = None if args.raw_sync_all_dates else run_date
-        curated_macro_args = build_curated_sync_macro_args(
-            run_date=curated_sync_date,
-            curated_database=args.curated_database,
-            curated_schema=args.curated_schema,
-            stage_name=args.stage_name,
-        )
-        curated_sync_cmd = build_dbt_curated_sync_cmd(
-            project_dir=project_dir,
-            profiles_dir=profiles_dir,
-            macro_args=curated_macro_args,
-        )
-        _run_command(curated_sync_cmd, dry_run=args.dry_run, step_name="curated_sync")
-    elif args.use_curated_parquet:
-        logger.info("Skipping CURATED sync step")
+    dbt_target = "test" if args.dev_limit else None
 
     if not args.skip_dbt_build:
-        dbt_vars = None
-        if args.use_curated_parquet:
-            dbt_vars = {"use_curated_parquet": True}
         dbt_build_cmd = build_dbt_build_cmd(
             project_dir=project_dir,
             profiles_dir=profiles_dir,
             selectors=args.select,
-            dbt_vars=dbt_vars,
+            target=dbt_target,
         )
         _run_command(dbt_build_cmd, dry_run=args.dry_run, step_name="dbt_build")
     else:

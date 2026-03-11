@@ -24,6 +24,8 @@ class PipelineConfig:
     s3_bucket: str | None = None
     gcs_bucket: str | None = None
     gcs_project: str | None = None
+    warehouse_uri: str | None = None
+    warehouse_uri_test: str | None = None
 
 
 def _require(name: str) -> str:
@@ -64,6 +66,8 @@ def load_config() -> PipelineConfig:
         s3_bucket=os.getenv("S3_BUCKET") if backend == "s3" else os.getenv("S3_BUCKET"),
         gcs_bucket=os.getenv("GCS_BUCKET", os.getenv("GCP_BUCKET_TEST")),
         gcs_project=os.getenv("GCS_PROJECT"),
+        warehouse_uri=os.getenv("WAREHOUSE_URI"),
+        warehouse_uri_test=os.getenv("WAREHOUSE_URI_TEST"),
     )
 
 
@@ -95,6 +99,8 @@ def load_configs_from_file(config_path: str | Path | None) -> list[PipelineConfi
     local_root = storage_cfg.get("local_root", os.getenv("LOCAL_ROOT", "data_lake"))
     gcs_bucket = storage_cfg.get("gcs_bucket", settings.get("gcs_bucket", os.getenv("GCS_BUCKET", os.getenv("GCP_BUCKET_TEST", "")))).strip() or None
     gcs_project = storage_cfg.get("gcs_project", os.getenv("GCS_PROJECT")) or None
+    warehouse_uri = settings.get("warehouse_uri", os.getenv("WAREHOUSE_URI", "")).strip() or None
+    warehouse_uri_test = settings.get("warehouse_uri_test", os.getenv("WAREHOUSE_URI_TEST", "")).strip() or None
 
     # Infer backend if not explicit
     if backend_raw:
@@ -128,6 +134,8 @@ def load_configs_from_file(config_path: str | Path | None) -> list[PipelineConfi
                 s3_bucket=s3_bucket,
                 gcs_bucket=gcs_bucket,
                 gcs_project=gcs_project,
+                warehouse_uri=warehouse_uri,
+                warehouse_uri_test=warehouse_uri_test,
             ))
 
     if not configs:
@@ -142,10 +150,26 @@ def resolve_run_date(run_date: str | None = None) -> date:
     return date.today()
 
 
-def with_overrides(config: PipelineConfig, league_id: int | None = None) -> PipelineConfig:
+def with_overrides(
+    config: PipelineConfig,
+    league_id: int | None = None,
+    dev_limit: int | None = None,
+) -> PipelineConfig:
     """Return a runtime-adjusted config without mutating env-derived defaults."""
-    if league_id is None:
+    changes = {}
+    if league_id is not None:
+        if league_id <= 0:
+            raise ValueError("league_id override must be a positive integer")
+        changes["league_id"] = league_id
+        
+    if dev_limit is not None:
+        s3_test = os.getenv("S3_BUCKET_TEST")
+        gcp_test = os.getenv("GCP_BUCKET_TEST")
+        if s3_test:
+            changes["s3_bucket"] = s3_test
+        if gcp_test:
+            changes["gcs_bucket"] = gcp_test
+            
+    if not changes:
         return config
-    if league_id <= 0:
-        raise ValueError("league_id override must be a positive integer")
-    return replace(config, league_id=league_id)
+    return replace(config, **changes)

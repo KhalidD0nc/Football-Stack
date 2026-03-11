@@ -2,9 +2,9 @@ version: 2
 
 sources:
   - name: curated
-    description: "Pre-flattened Parquet tables loaded from curated/ prefix. Replaces raw VARIANT + LATERAL FLATTEN."
+    description: "Pre-flattened tabular data natively pushed by Python. Replaces raw VARIANT + LATERAL FLATTEN."
     database: "{{ var('curated_database', target.database) }}"
-    schema: "{{ var('curated_schema', 'CURATED') }}"
+    schema: "{{ var('curated_schema', 'STAGING') }}"
     tables:
       - name: teams
         description: "Team information and venue details."

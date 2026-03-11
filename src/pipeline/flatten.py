@@ -5,7 +5,7 @@ deduplicates, and writes Parquet to the curated/ prefix. Replaces Snowflake
 LATERAL FLATTEN logic with portable Python, producing warehouse-agnostic output.
 
 Usage:
-    python -m src.pipeline.flatten --date 2025-01-01 --config pipeline_config.json
+    python -m src.pipeline.flatten --date 2026-03-10 --config pipeline_config.json
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from datetime import UTC, date, datetime
 from functools import partial
 from time import perf_counter
 from typing import Any, Callable
+from urllib.parse import urlsplit, urlunsplit
 
 import polars as pl
 import pyarrow as pa
@@ -934,6 +935,61 @@ def _rows_to_parquet(rows: list[dict], schema: pa.Schema) -> bytes:
     return buf.getvalue()
 
 
+def _empty_dataframe_from_schema(schema: pa.Schema) -> pl.DataFrame:
+    """Build an empty Polars frame that preserves the declared output schema."""
+    table = pa.table({field.name: pa.array([], type=field.type) for field in schema}, schema=schema)
+    return pl.from_arrow(table)
+
+
+def normalize_warehouse_uri(
+    uri: str | None,
+    *,
+    default_database: str | None = None,
+    default_schema: str | None = None,
+) -> str | None:
+    """Ensure Snowflake URIs include database/schema context for unqualified writes."""
+    if not uri:
+        return uri
+
+    parts = urlsplit(uri)
+    if parts.scheme != "snowflake":
+        return uri
+
+    path_parts = [part for part in parts.path.split("/") if part]
+    if len(path_parts) >= 2:
+        return uri
+
+    database = path_parts[0] if path_parts else (default_database or "")
+    schema = default_schema or ""
+    if not database or not schema:
+        return uri
+
+    return urlunsplit((parts.scheme, parts.netloc, f"/{database}/{schema}", parts.query, parts.fragment))
+
+
+def warehouse_table_name(output_table: str) -> str:
+    """Physical Snowflake table name for flattened curated outputs."""
+    return output_table
+
+
+def warehouse_table_identifier(output_table: str, warehouse_uri: str | None = None) -> str:
+    """Return a schema-qualified Snowflake identifier when schema is available."""
+    table_name = warehouse_table_name(output_table)
+    if not warehouse_uri:
+        return table_name
+
+    parts = urlsplit(warehouse_uri)
+    if parts.scheme != "snowflake":
+        return table_name
+
+    path_parts = [part for part in parts.path.split("/") if part]
+    if len(path_parts) < 2:
+        return table_name
+
+    schema = path_parts[1]
+    return f"{schema}.{table_name}"
+
+
 # ── Main orchestration ───────────────────────────────────────────────────────
 
 
@@ -943,6 +999,7 @@ def run_flatten(
     season: int,
     dt: date,
     run_id: str | None = None,
+    warehouse_uri: str | None = None,
 ) -> dict[str, int]:
     """Read raw JSON, flatten to Parquet, write to curated/.
 
@@ -1001,19 +1058,40 @@ def run_flatten(
                 except Exception:
                     logger.warning("Failed to flatten doc entity_key=%s", doc.get("entity_key"), exc_info=True)
 
+        schema = SCHEMAS[output_table]
+
         # Entity-level dedup if configured
         if output_table in ENTITY_DEDUP and all_rows:
             partition_cols, order_cols, coalesce_defaults = ENTITY_DEDUP[output_table]
             df = pl.DataFrame(all_rows)
             df = _entity_dedup(df, partition_cols, order_cols, coalesce_defaults)
             all_rows = df.to_dicts()
+        elif all_rows:
+            df = pl.DataFrame(all_rows)
+        else:
+            df = _empty_dataframe_from_schema(schema)
 
         # Write Parquet
-        schema = SCHEMAS[output_table]
         parquet_bytes = _rows_to_parquet(all_rows, schema)
         out_key = writer.put_curated(league_id, season, output_table, dt, run_id, parquet_bytes)
         summary[output_table] = len(all_rows)
         logger.info("Wrote %d rows to %s", len(all_rows), out_key)
+
+        # Push to Warehouse if URI is provided
+        if warehouse_uri:
+            short_name = warehouse_table_name(output_table)
+            full_name = warehouse_table_identifier(output_table, warehouse_uri)
+            logger.info("Pushing %d rows to warehouse table %s", len(df), full_name)
+            try:
+                df.write_database(
+                    table_name=full_name,
+                    connection=warehouse_uri,
+                    if_table_exists="append",
+                )
+            except Exception as e:
+                logger.error("Failed to push %s to warehouse: %s", full_name, e)
+                # We don't raise here to avoid failing the entire pipeline just because one table push failed,
+                # but you could change this depending on strictness requirements.
 
     return summary
 
@@ -1024,9 +1102,9 @@ def run_flatten(
 def _cli_main() -> None:
     parser = argparse.ArgumentParser(description="Flatten raw JSON to curated Parquet.")
     parser.add_argument("--date", required=True, help="Run date YYYY-MM-DD.")
-    parser.add_argument("--config", default=None, help="Path to pipeline_config.json.")
     parser.add_argument("--league-id", type=int, default=None, help="Override league ID.")
     parser.add_argument("--season", type=int, default=None, help="Override season.")
+    parser.add_argument("--warehouse-uri", default=None, help="Warehouse connection string for direct load.")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
@@ -1051,7 +1129,9 @@ def _cli_main() -> None:
         )
         start = perf_counter()
         logger.info("Flattening league_id=%d season=%d dt=%s", lid, szn, run_date)
-        summary = run_flatten(writer, lid, szn, run_date, run_id)
+        
+        uri = args.warehouse_uri or config.warehouse_uri
+        summary = run_flatten(writer, lid, szn, run_date, run_id, warehouse_uri=uri)
         logger.info(
             "Flatten complete league_id=%d in %.2fs: %s",
             lid, perf_counter() - start, summary,

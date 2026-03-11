@@ -15,6 +15,7 @@ import json
 from datetime import date
 from typing import Any
 
+import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
@@ -23,6 +24,7 @@ from src.pipeline.flatten import (
     ENDPOINT_REGISTRY,
     ENTITY_DEDUP,
     FlattenContext,
+    _empty_dataframe_from_schema,
     _entity_dedup,
     _rows_to_parquet,
     _source_dedup,
@@ -43,6 +45,7 @@ from src.pipeline.flatten import (
     flatten_transfers,
     parse_pct,
     run_flatten,
+    warehouse_table_identifier,
 )
 from src.pipeline.schemas import SCHEMAS
 from src.pipeline.storage import LocalFileWriter
@@ -101,6 +104,67 @@ class TestParsePct:
 
     def test_no_pct_sign(self) -> None:
         assert parse_pct("75") == 75.0
+
+
+class TestWarehouseHelpers:
+    def test_warehouse_table_identifier_qualifies_snowflake_tables(self) -> None:
+        identifier = warehouse_table_identifier(
+            "injuries",
+            "snowflake://user:pass@example.snowflakecomputing.com/LEAGUES_DATA_TEST/STAGING",
+        )
+
+        assert identifier == "STAGING.injuries"
+
+    def test_empty_dataframe_preserves_schema(self) -> None:
+        df = _empty_dataframe_from_schema(SCHEMAS["injuries"])
+
+        assert df.is_empty()
+        assert df.columns == SCHEMAS["injuries"].names
+
+    def test_run_flatten_uses_typed_empty_dataframe_for_warehouse_writes(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Any,
+    ) -> None:
+        writer = LocalFileWriter(root=tmp_path)
+        league_id = 307
+        season = 2024
+        dt = date(2025, 1, 15)
+        run_id = "20250115T120000Z"
+        captured: dict[str, list[str]] = {}
+
+        writer.put_raw(
+            league_id=league_id,
+            season=season,
+            endpoint="injuries",
+            dt=dt,
+            run_id=run_id,
+            part=1,
+            body={"payload": {"response": []}},
+        )
+
+        def fake_write_database(
+            self: pl.DataFrame,
+            *,
+            table_name: str,
+            connection: str,
+            if_table_exists: str,
+        ) -> None:
+            captured[table_name] = self.columns
+
+        monkeypatch.setattr(pl.DataFrame, "write_database", fake_write_database)
+
+        summary = run_flatten(
+            writer,
+            league_id,
+            season,
+            dt,
+            run_id=run_id,
+            warehouse_uri="snowflake://user:pass@example.snowflakecomputing.com/LEAGUES_DATA_TEST/STAGING",
+        )
+
+        assert summary["injuries"] == 0
+        assert captured["STAGING.injuries"] == SCHEMAS["injuries"].names
 
 
 # ===========================================================================
