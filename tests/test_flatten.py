@@ -24,6 +24,7 @@ from src.pipeline.flatten import (
     ENDPOINT_REGISTRY,
     ENTITY_DEDUP,
     FlattenContext,
+    WarehouseSyncError,
     _empty_dataframe_from_schema,
     _entity_dedup,
     _rows_to_parquet,
@@ -143,16 +144,19 @@ class TestWarehouseHelpers:
             body={"payload": {"response": []}},
         )
 
-        def fake_write_database(
-            self: pl.DataFrame,
+        def fake_replace_snowflake_slice(
+            df: pl.DataFrame,
+            output_table: str,
+            warehouse_uri: str,
             *,
-            table_name: str,
-            connection: str,
-            if_table_exists: str,
+            league_id: int,
+            season: int,
+            dt: date,
+            run_id: str,
         ) -> None:
-            captured[table_name] = self.columns
+            captured[warehouse_table_identifier(output_table, warehouse_uri)] = df.columns
 
-        monkeypatch.setattr(pl.DataFrame, "write_database", fake_write_database)
+        monkeypatch.setattr("src.pipeline.flatten._replace_snowflake_slice", fake_replace_snowflake_slice)
 
         summary = run_flatten(
             writer,
@@ -165,6 +169,90 @@ class TestWarehouseHelpers:
 
         assert summary["injuries"] == 0
         assert captured["STAGING.injuries"] == SCHEMAS["injuries"].names
+
+    def test_run_flatten_raises_when_warehouse_sync_fails(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Any,
+    ) -> None:
+        writer = LocalFileWriter(root=tmp_path)
+        league_id = 307
+        season = 2024
+        dt = date(2025, 1, 15)
+        run_id = "20250115T120000Z"
+
+        writer.put_raw(
+            league_id=league_id,
+            season=season,
+            endpoint="injuries",
+            dt=dt,
+            run_id=run_id,
+            part=1,
+            body=INJURIES_RAW,
+        )
+
+        def fake_replace_snowflake_slice(
+            df: pl.DataFrame,
+            output_table: str,
+            warehouse_uri: str,
+            *,
+            league_id: int,
+            season: int,
+            dt: date,
+            run_id: str,
+        ) -> None:
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr("src.pipeline.flatten._replace_snowflake_slice", fake_replace_snowflake_slice)
+
+        with pytest.raises(WarehouseSyncError, match="STAGING.injuries"):
+            run_flatten(
+                writer,
+                league_id,
+                season,
+                dt,
+                run_id=run_id,
+                warehouse_backend="snowflake",
+                warehouse_uri="snowflake://user:pass@example.snowflakecomputing.com/LEAGUES_DATA_TEST/STAGING",
+            )
+
+    def test_run_flatten_keeps_parquet_only_mode_non_fatal(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Any,
+    ) -> None:
+        writer = LocalFileWriter(root=tmp_path)
+        league_id = 307
+        season = 2024
+        dt = date(2025, 1, 15)
+        run_id = "20250115T120000Z"
+
+        writer.put_raw(
+            league_id=league_id,
+            season=season,
+            endpoint="injuries",
+            dt=dt,
+            run_id=run_id,
+            part=1,
+            body=INJURIES_RAW,
+        )
+
+        def fail_if_called(*args: Any, **kwargs: Any) -> None:
+            raise AssertionError("warehouse sync should not run in parquet-only mode")
+
+        monkeypatch.setattr("src.pipeline.flatten._replace_snowflake_slice", fail_if_called)
+
+        summary = run_flatten(
+            writer,
+            league_id,
+            season,
+            dt,
+            run_id=run_id,
+            warehouse_backend="none",
+            warehouse_uri="snowflake://user:pass@example.snowflakecomputing.com/LEAGUES_DATA_TEST/STAGING",
+        )
+
+        assert summary["injuries"] == 1
 
 
 # ===========================================================================

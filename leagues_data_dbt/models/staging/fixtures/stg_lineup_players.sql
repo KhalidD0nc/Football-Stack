@@ -2,7 +2,7 @@
 
 {% if var('use_curated_parquet', false) %}
 
-select * from {{ source('curated', 'lineup_players') }}
+{{ curated_source_latest('lineup_players', ['fixture_id', 'team_id', 'player_id', 'lineup_bucket']) }}
 
 {% else %}
 

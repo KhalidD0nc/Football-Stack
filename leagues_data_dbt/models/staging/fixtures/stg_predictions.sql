@@ -2,7 +2,7 @@
 
 {% if var('use_curated_parquet', false) %}
 
-select * from {{ source('curated', 'predictions') }}
+{{ curated_source_latest('predictions', ['fixture_id']) }}
 
 {% else %}
 

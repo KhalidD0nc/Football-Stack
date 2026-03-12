@@ -2,7 +2,7 @@
 
 {% if var('use_curated_parquet', false) %}
 
-select * from {{ source('curated', 'team_statistics') }}
+{{ curated_source_latest('team_statistics', ['team_id', 'league_id', 'season']) }}
 
 {% else %}
 

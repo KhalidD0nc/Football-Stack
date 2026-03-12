@@ -2,7 +2,7 @@
 
 {% if var('use_curated_parquet', false) %}
 
-select * from {{ source('curated', 'match_events') }}
+{{ curated_source_latest('match_events', ['fixture_id', 'event_sequence']) }}
 
 {% else %}
 

@@ -2,7 +2,10 @@
 
 {% if var('use_curated_parquet', false) %}
 
-select * from {{ source('curated', 'injuries') }}
+{{ curated_source_latest(
+    'injuries',
+    ['player_id', 'coalesce(fixture_id, -1)', 'league_id', 'season', "coalesce(injury_type, coalesce(injury_reason, 'na'))"]
+) }}
 
 {% else %}
 

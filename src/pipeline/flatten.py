@@ -35,6 +35,10 @@ logger = logging.getLogger(__name__)
 # ── Context & utilities ──────────────────────────────────────────────────────
 
 
+class WarehouseSyncError(RuntimeError):
+    """Raised when direct warehouse publication fails for a curated table."""
+
+
 @dataclass(frozen=True)
 class FlattenContext:
     league_id: int
@@ -967,27 +971,128 @@ def normalize_warehouse_uri(
     return urlunsplit((parts.scheme, parts.netloc, f"/{database}/{schema}", parts.query, parts.fragment))
 
 
+def warehouse_target_parts(warehouse_uri: str | None) -> tuple[str | None, str | None]:
+    """Return (database, schema) for Snowflake URIs when present."""
+    if not warehouse_uri:
+        return None, None
+
+    parts = urlsplit(warehouse_uri)
+    if parts.scheme != "snowflake":
+        return None, None
+
+    path_parts = [part for part in parts.path.split("/") if part]
+    database = path_parts[0] if len(path_parts) >= 1 else None
+    schema = path_parts[1] if len(path_parts) >= 2 else None
+    return database, schema
+
+
+def warehouse_identifier(table_name: str, warehouse_uri: str | None = None) -> str:
+    """Return a fully qualified warehouse identifier when context is available."""
+    database, schema = warehouse_target_parts(warehouse_uri)
+    parts = [part for part in (database, schema, table_name) if part]
+    return ".".join(parts) if parts else table_name
+
+
 def warehouse_table_name(output_table: str) -> str:
     """Physical Snowflake table name for flattened curated outputs."""
     return output_table
 
 
 def warehouse_table_identifier(output_table: str, warehouse_uri: str | None = None) -> str:
-    """Return a schema-qualified Snowflake identifier when schema is available."""
-    table_name = warehouse_table_name(output_table)
+    """Return a fully qualified warehouse identifier when context is available."""
+    return warehouse_identifier(warehouse_table_name(output_table), warehouse_uri)
+
+
+def _quote_sql_identifier(identifier: str) -> str:
+    return ".".join(f'"{part.replace("\"", "\"\"")}"' for part in identifier.split("."))
+
+
+def _replace_snowflake_slice(
+    df: pl.DataFrame,
+    output_table: str,
+    warehouse_uri: str,
+    *,
+    league_id: int,
+    season: int,
+    dt: date,
+    run_id: str,
+) -> None:
+    """Replace a league/season/day slice atomically via a temporary table."""
+    try:
+        from sqlalchemy import create_engine, text
+    except ImportError as exc:
+        raise RuntimeError(
+            "Snowflake direct loads now require sqlalchemy and snowflake-sqlalchemy "
+            "to replace warehouse slices idempotently."
+        ) from exc
+
+    target_identifier = warehouse_table_identifier(output_table, warehouse_uri)
+    temp_suffix = re.sub(r"[^A-Za-z0-9_]", "_", run_id)[:48]
+    temp_table_name = f"__tmp_{warehouse_table_name(output_table)}_{temp_suffix}".lower()
+    temp_identifier = warehouse_identifier(temp_table_name, warehouse_uri)
+    quoted_target = _quote_sql_identifier(target_identifier)
+    quoted_temp = _quote_sql_identifier(temp_identifier)
+    params = {"league_id": league_id, "season": season, "dt": dt.isoformat()}
+    engine = create_engine(warehouse_uri)
+
+    try:
+        df.write_database(
+            table_name=temp_identifier,
+            connection=warehouse_uri,
+            if_table_exists="replace",
+        )
+
+        with engine.begin() as conn:
+            conn.execute(text(f"CREATE TABLE IF NOT EXISTS {quoted_target} LIKE {quoted_temp}"))
+            conn.execute(
+                text(
+                    f"""
+                    DELETE FROM {quoted_target}
+                    WHERE league_id = :league_id
+                      AND season = :season
+                      AND dt = :dt
+                    """
+                ),
+                params,
+            )
+            conn.execute(text(f"INSERT INTO {quoted_target} SELECT * FROM {quoted_temp}"))
+    finally:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"DROP TABLE IF EXISTS {quoted_temp}"))
+        finally:
+            engine.dispose()
+
+
+def resolve_warehouse_backend(warehouse_backend: str | None, warehouse_uri: str | None) -> str:
+    """Normalize direct warehouse backend selection for runtime calls."""
+    explicit = (warehouse_backend or "").strip().lower()
+    if explicit == "none":
+        return "none"
+
+    if explicit == "":
+        if not warehouse_uri:
+            return "none"
+        inferred = urlsplit(warehouse_uri).scheme
+        if inferred == "snowflake":
+            return "snowflake"
+        raise ValueError(
+            f"Unsupported direct warehouse backend inferred from warehouse URI scheme '{inferred}'. "
+            "Set DATA_WAREHOUSE=none to disable direct loads."
+        )
+
+    if explicit != "snowflake":
+        raise ValueError(
+            f"Unsupported warehouse backend '{explicit}'. Supported values are 'snowflake' and 'none'."
+        )
+
     if not warehouse_uri:
-        return table_name
+        raise ValueError("warehouse_backend='snowflake' requires a warehouse URI.")
 
-    parts = urlsplit(warehouse_uri)
-    if parts.scheme != "snowflake":
-        return table_name
+    if urlsplit(warehouse_uri).scheme != "snowflake":
+        raise ValueError("warehouse_backend='snowflake' requires a snowflake:// warehouse URI.")
 
-    path_parts = [part for part in parts.path.split("/") if part]
-    if len(path_parts) < 2:
-        return table_name
-
-    schema = path_parts[1]
-    return f"{schema}.{table_name}"
+    return "snowflake"
 
 
 # ── Main orchestration ───────────────────────────────────────────────────────
@@ -999,6 +1104,7 @@ def run_flatten(
     season: int,
     dt: date,
     run_id: str | None = None,
+    warehouse_backend: str | None = None,
     warehouse_uri: str | None = None,
 ) -> dict[str, int]:
     """Read raw JSON, flatten to Parquet, write to curated/.
@@ -1007,6 +1113,7 @@ def run_flatten(
     """
     if run_id is None:
         run_id = generate_run_id()
+    warehouse_backend = resolve_warehouse_backend(warehouse_backend, warehouse_uri)
 
     loaded_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     ctx = FlattenContext(
@@ -1026,6 +1133,7 @@ def run_flatten(
 
     for output_table, sources in output_groups.items():
         all_rows: list[dict] = []
+        had_raw_input = False
 
         for raw_ep, flatten_fn in sources:
             ep_normalized = normalize_endpoint(raw_ep)
@@ -1033,6 +1141,7 @@ def run_flatten(
             if not raw_keys:
                 logger.debug("No raw files for endpoint=%s", raw_ep)
                 continue
+            had_raw_input = True
 
             # Read all raw docs for this endpoint
             raw_docs = []
@@ -1078,20 +1187,40 @@ def run_flatten(
         logger.info("Wrote %d rows to %s", len(all_rows), out_key)
 
         # Push to Warehouse if URI is provided
-        if warehouse_uri:
-            short_name = warehouse_table_name(output_table)
+        if warehouse_backend != "none" and warehouse_uri:
             full_name = warehouse_table_identifier(output_table, warehouse_uri)
-            logger.info("Pushing %d rows to warehouse table %s", len(df), full_name)
-            try:
-                df.write_database(
-                    table_name=full_name,
-                    connection=warehouse_uri,
-                    if_table_exists="append",
+            if not had_raw_input:
+                logger.info(
+                    "Skipping warehouse push for %s; no raw input found for league_id=%s season=%s dt=%s",
+                    full_name,
+                    league_id,
+                    season,
+                    dt.isoformat(),
                 )
+                continue
+
+            logger.info("Syncing %d rows to warehouse table %s", len(df), full_name)
+            try:
+                if warehouse_backend == "snowflake":
+                    _replace_snowflake_slice(
+                        df,
+                        output_table,
+                        warehouse_uri,
+                        league_id=league_id,
+                        season=season,
+                        dt=dt,
+                        run_id=run_id,
+                    )
+                else:
+                    raise RuntimeError(
+                        f"Direct warehouse sync is not implemented for backend '{warehouse_backend}'. "
+                        "Set DATA_WAREHOUSE=none to disable direct loads."
+                    )
             except Exception as e:
                 logger.error("Failed to push %s to warehouse: %s", full_name, e)
-                # We don't raise here to avoid failing the entire pipeline just because one table push failed,
-                # but you could change this depending on strictness requirements.
+                raise WarehouseSyncError(
+                    f"Warehouse sync failed for curated table {full_name}"
+                ) from e
 
     return summary
 
@@ -1104,6 +1233,7 @@ def _cli_main() -> None:
     parser.add_argument("--date", required=True, help="Run date YYYY-MM-DD.")
     parser.add_argument("--league-id", type=int, default=None, help="Override league ID.")
     parser.add_argument("--season", type=int, default=None, help="Override season.")
+    parser.add_argument("--warehouse-backend", default=None, help="Direct warehouse backend (for example: snowflake or none).")
     parser.add_argument("--warehouse-uri", default=None, help="Warehouse connection string for direct load.")
     args = parser.parse_args()
 
@@ -1131,7 +1261,16 @@ def _cli_main() -> None:
         logger.info("Flattening league_id=%d season=%d dt=%s", lid, szn, run_date)
         
         uri = args.warehouse_uri or config.warehouse_uri
-        summary = run_flatten(writer, lid, szn, run_date, run_id, warehouse_uri=uri)
+        warehouse_backend = args.warehouse_backend or config.warehouse_backend
+        summary = run_flatten(
+            writer,
+            lid,
+            szn,
+            run_date,
+            run_id,
+            warehouse_backend=warehouse_backend,
+            warehouse_uri=uri,
+        )
         logger.info(
             "Flatten complete league_id=%d in %.2fs: %s",
             lid, perf_counter() - start, summary,

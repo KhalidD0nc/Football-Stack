@@ -2,7 +2,7 @@
 
 {% if var('use_curated_parquet', false) %}
 
-select * from {{ source('curated', 'player_leaderboards') }}
+{{ curated_source_latest('player_leaderboards', ['league_id', 'season', 'ranking_type', 'player_id']) }}
 
 {% else %}
 

@@ -5,6 +5,7 @@ import os
 from dataclasses import dataclass, replace
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 
@@ -24,6 +25,7 @@ class PipelineConfig:
     s3_bucket: str | None = None
     gcs_bucket: str | None = None
     gcs_project: str | None = None
+    warehouse_backend: str = "none"
     warehouse_uri: str | None = None
     warehouse_uri_test: str | None = None
 
@@ -47,10 +49,44 @@ def _infer_backend() -> str:
     return "local"
 
 
+def _resolve_warehouse_backend(raw_backend: str | None, warehouse_uri: str | None) -> str:
+    """Normalize the direct-load backend and reject unsupported adapters."""
+    explicit = (raw_backend or "").strip().lower()
+    if explicit == "none":
+        return "none"
+
+    if explicit == "":
+        if not warehouse_uri:
+            return "none"
+        inferred = urlsplit(warehouse_uri).scheme.strip().lower()
+        if inferred == "snowflake":
+            return "snowflake"
+        raise ValueError(
+            f"Unsupported direct warehouse backend inferred from WAREHOUSE_URI scheme '{inferred}'. "
+            "Set DATA_WAREHOUSE=none to disable direct loads."
+        )
+
+    if explicit != "snowflake":
+        raise ValueError(
+            f"Unsupported DATA_WAREHOUSE '{explicit}'. Supported values are 'snowflake' and 'none'."
+        )
+
+    if not warehouse_uri:
+        raise ValueError("DATA_WAREHOUSE='snowflake' requires WAREHOUSE_URI to be set.")
+
+    if urlsplit(warehouse_uri).scheme.strip().lower() != "snowflake":
+        raise ValueError("DATA_WAREHOUSE='snowflake' requires a snowflake:// WAREHOUSE_URI.")
+
+    return "snowflake"
+
+
 def load_config() -> PipelineConfig:
     load_dotenv()
 
     backend = _infer_backend()
+    warehouse_uri = os.getenv("WAREHOUSE_URI", "").strip() or None
+    warehouse_uri_test = os.getenv("WAREHOUSE_URI_TEST", "").strip() or None
+    warehouse_backend = _resolve_warehouse_backend(os.getenv("DATA_WAREHOUSE"), warehouse_uri)
 
     return PipelineConfig(
         api_football_key=_require("API_FOOTBALL_KEY"),
@@ -66,8 +102,9 @@ def load_config() -> PipelineConfig:
         s3_bucket=os.getenv("S3_BUCKET") if backend == "s3" else os.getenv("S3_BUCKET"),
         gcs_bucket=os.getenv("GCS_BUCKET", os.getenv("GCP_BUCKET_TEST")),
         gcs_project=os.getenv("GCS_PROJECT"),
-        warehouse_uri=os.getenv("WAREHOUSE_URI"),
-        warehouse_uri_test=os.getenv("WAREHOUSE_URI_TEST"),
+        warehouse_backend=warehouse_backend,
+        warehouse_uri=warehouse_uri,
+        warehouse_uri_test=warehouse_uri_test,
     )
 
 
@@ -101,6 +138,12 @@ def load_configs_from_file(config_path: str | Path | None) -> list[PipelineConfi
     gcs_project = storage_cfg.get("gcs_project", os.getenv("GCS_PROJECT")) or None
     warehouse_uri = settings.get("warehouse_uri", os.getenv("WAREHOUSE_URI", "")).strip() or None
     warehouse_uri_test = settings.get("warehouse_uri_test", os.getenv("WAREHOUSE_URI_TEST", "")).strip() or None
+    warehouse_backend_raw = (
+        settings.get("data_warehouse")
+        or settings.get("warehouse_backend")
+        or os.getenv("DATA_WAREHOUSE", "")
+    )
+    warehouse_backend = _resolve_warehouse_backend(warehouse_backend_raw, warehouse_uri)
 
     # Infer backend if not explicit
     if backend_raw:
@@ -134,6 +177,7 @@ def load_configs_from_file(config_path: str | Path | None) -> list[PipelineConfi
                 s3_bucket=s3_bucket,
                 gcs_bucket=gcs_bucket,
                 gcs_project=gcs_project,
+                warehouse_backend=warehouse_backend,
                 warehouse_uri=warehouse_uri,
                 warehouse_uri_test=warehouse_uri_test,
             ))

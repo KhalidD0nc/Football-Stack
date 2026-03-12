@@ -2,7 +2,7 @@
 
 {% if var('use_curated_parquet', false) %}
 
-select * from {{ source('curated', 'match_team_stats') }}
+{{ curated_source_latest('match_team_stats', ['fixture_id', 'team_id']) }}
 
 {% else %}
 

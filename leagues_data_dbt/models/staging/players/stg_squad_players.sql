@@ -2,7 +2,7 @@
 
 {% if var('use_curated_parquet', false) %}
 
-select * from {{ source('curated', 'squad_players') }}
+{{ curated_source_latest('squad_players', ['team_id', 'player_id', 'league_id', 'season']) }}
 
 {% else %}
 

@@ -227,6 +227,7 @@ def main() -> None:
                 config.season,
                 run_date,
                 flatten_run_id,
+                warehouse_backend=config.warehouse_backend,
                 warehouse_uri=uri,
             )
             logger.info("Step complete: flatten league_id=%s in %.2fs", config.league_id, perf_counter() - step_start)
