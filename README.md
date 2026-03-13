@@ -16,6 +16,11 @@ It is designed to be fully extensible, supporting any league globally without ha
   <img src="resources/pipeline_diagram.png" alt="Leagues Data Project Pipeline Diagram" />
 </div>
 
+## Data Architecture Philosophy
+
+- **Staging & Silver Layers (Objective Prep):** These layers strictly focus on cleaning, normalizing, deduplicating, and standardizing the raw JSON data. They are universal and provide a solid, trusted foundation perfectly mirroring the API.
+- **Gold & Platinum Layers (Subjective & Use-case Driven):** These layers construct business logic and AI-ready features. Metrics like "Team Form," "Attacking Style," or "Player Impact" are highly subjective and depend heavily on your product's specific needs. We have provided **rich, pre-built Gold and Platinum models** as powerful starting points, but you have the flexibility to customize or replace these logic layers to fit your exact goals.
+
 ## Features
 
 ### Ingestion (Bronze Layer)
