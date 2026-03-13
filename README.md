@@ -173,7 +173,12 @@ python -m scripts.run_pipeline --force-league-snapshot-refresh --baseline-only
 What the full pipeline does:
 - Runs API-Football ingestion to the configured storage backend.
 - Runs dbt macro `sync_raw_from_s3` to load S3 files into `LEAGUES_DATA.RAW.*` (S3 backend only).
-- Runs `dbt build --select staging silver gold` (models + tests).
+- Runs `dbt build --select staging silver gold platinum` (models + tests). **Note:** Gold and Platinum models are disabled by default.
+
+To enable the advanced analytical layers (Gold) and AI features (Platinum), use the respective flags:
+```bash
+python -m scripts.run_pipeline --enable-gold --enable-platinum
+```
 
 Season selection note:
 - `SEASON` is always read from `.env` (`SEASON=...`), including when `--league-id` is used.
