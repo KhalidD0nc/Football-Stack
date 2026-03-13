@@ -175,7 +175,7 @@ What the full pipeline does:
 - Runs dbt macro `sync_raw_from_s3` to load S3 files into `LEAGUES_DATA.RAW.*` (S3 backend only).
 - Runs `dbt build --select staging silver gold platinum` (models + tests). **Note:** Gold and Platinum models are disabled by default.
 
-To enable the advanced analytical layers (Gold) and AI features (Platinum), use the respective flags:
+To enable the advanced analytical layers (Gold) and AI features (Platinum), use the respective flags. (**Note:** Enabling Platinum automatically enables the Gold layer it depends on):
 ```bash
 python -m scripts.run_pipeline --enable-gold --enable-platinum
 ```

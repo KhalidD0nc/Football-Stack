@@ -256,7 +256,7 @@ def main() -> None:
 
     if not args.skip_dbt_build:
         dbt_vars = {}
-        if args.enable_gold:
+        if args.enable_gold or args.enable_platinum:
             dbt_vars["enable_gold_layer"] = True
         if args.enable_platinum:
             dbt_vars["enable_platinum_layer"] = True

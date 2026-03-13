@@ -46,7 +46,7 @@ models:
       gold:
         +materialized: table
         +schema: gold
-        +enabled: "{{ var('enable_gold_layer', false) }}"
+        +enabled: "{{ var('enable_gold_layer', false) or var('enable_platinum_layer', false) }}"
       platinum:
         +materialized: table
         +schema: platinum
