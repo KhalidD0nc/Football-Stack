@@ -1,51 +1,25 @@
 # Leagues Data Project
 
-## Scope
-This repository is for **Data Engineering only**. It focuses on the automated ingestion, storage, and transformation of football league data (via API-Football) into a queryable data lake. It supports any league available on API-Football — no hardcoded league defaults.
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
+![dbt](https://img.shields.io/badge/dbt-compatible-orange.svg)
 
-## Stage Tracker
-We keep only two active stage labels:
-- `Current Stage`: the stage being executed now
-- `Next Stage`: the immediate follow-up stage
+**Are you looking to build a data-driven football product, train Machine Learning models, or power AI agents with high-quality sports analytics?**
 
-Transition rule (must be followed every stage):
-1. Move `Next Stage` into `Current Stage`
-2. Define a new `Next Stage`
-3. Update both:
-   - `README.md`
-   - `docs/Data Engineering Architecture and Plan.md`
-   - `docs/Data Engineering Implementation Checklist.md`
+**Leagues Data Project** is your starting point. It is an end-to-end data engineering pipeline that automates the ingestion, storage, and transformation of football (soccer) league data via [API-Football](https://www.api-football.com/). 
 
-## Current Stage
-**Stage 5 - Agent Integration & Data Observability (Completed/In Progress)**
-- Build advanced Platinum-layer models tailored for AI capabilities (Match Intelligence, Player Archetypes, Prediction Accuracy).
-- Establish stable interfaces and final documentation for the AI coaching system.
-- Implement specialized marts for agent features (e.g., Playing Styles, Event Momentum).
-- Finalize automated quality and freshness reporting.
+💡 **Cost-Efficient & High Performance:** We built this architecture with a relentless focus on minimizing operational costs while maximizing performance. By utilizing intelligent idempotency (to eliminate redundant and costly API calls), local-first development options, and optimized data processing, we drastically lowered the cost of running a large-scale sports data pipeline.
 
-### Stage 3 & 4 Progress (Completed)
-- Stage 3 normalized Silver models created (15 staging, 9 silver entities).
-- Phase 1 foundations and schema contracts implemented natively in dbt.
-- Gold Layer models fully built and executed successfully:
-  - **Teams**: `gold_team_performance_summary`, `gold_team_scoring_profile`, `gold_team_discipline_profile`
-  - **Players**: `gold_player_performance_mart`, `gold_player_season_summary`
-  - **Fixtures**: `gold_match_team_performance`
-  - **Availability**: `gold_squad_availability`
-- Grain bug resolved via `league_id` and `season` groupings. Null handling fixed via `COALESCE`.
+It is designed to be fully extensible, supporting any league globally without hardcoded defaults, and orchestrates data from raw API payloads all the way to agent-ready AI features.
 
-### Stage 5 Progress (Latest)
-- Platinum Layer (AI Features) created and verified:
-  - **Teams (5 models)**: Attacking Style, Defensive Consistency, Discipline Risk, Form Momentum, Home Fortress.
-  - **Players (5 models)**: Duel Dominance, Impact Score, Per-90 Efficiency, Performance Trend, Style Fingerprint.
-  - **Fixtures (1 model)**: Match Intelligence.
-  - **Predictions (1 model)**: Prediction Accuracy.
-- Verified agent-ready correctness, extracted logic for upsets, handling of goalless draws safely, and player styles modeling.
+<div align="center">
+  <img src="resources/pipeline_diagram.png" alt="Leagues Data Project Pipeline Diagram" />
+</div>
 
-## Next Stage
-**Stage 6 - Productionization & CI/CD**
-- Build test suites focusing on data freshness and volume anomalies.
-- Finalize CI/CD pipeline and automated data lineage tracking.
-- Orchestrate end-to-end multi-season backfills incrementally.
+## Data Architecture Philosophy
+
+- **Staging & Silver Layers (Objective Prep):** These layers strictly focus on cleaning, normalizing, deduplicating, and standardizing the raw JSON data. They are universal and provide a solid, trusted foundation perfectly mirroring the API.
+- **Gold & Platinum Layers (Subjective & Use-case Driven):** These layers construct business logic and AI-ready features. Metrics like "Team Form," "Attacking Style," or "Player Impact" are highly subjective and depend heavily on your product's specific needs. We have provided **rich, pre-built Gold and Platinum models** as powerful starting points, but you have the flexibility to customize or replace these logic layers to fit your exact goals.
 
 ## Features
 
@@ -99,6 +73,17 @@ Transition rule (must be followed every stage):
 Backward compat: if `STORAGE_BACKEND` is unset but `S3_BUCKET` is set, the backend is inferred as `s3`.
 
 ## Quick Start
+
+### 🐳 Docker (The Easiest Way)
+
+You can run the entire pipeline with a single command using Docker. Ensure Docker and Docker Compose are installed.
+
+1. Ensure your `.env` file is ready with the required API keys.
+2. Run the end-to-end pipeline:
+   ```bash
+   docker-compose up
+   ```
+   This will automatically build the image, install Python and dbt dependencies, and execute the full pipeline. The ingested data will be stored safely in your local `data_lake/` folder via volume mapping.
 
 ### Python Ingestion
 To run the daily ingestion script:
@@ -232,3 +217,13 @@ Implementation checklist:
 - `docs/Data Engineering Implementation Checklist.md`
 Project Context:
 - `docs/Project_Context.md`
+
+## Contributing
+
+Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+
+Please refer to the [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on how to set up the project and submit your pull requests.
+
+## License
+
+Distributed under the MIT License. See [LICENSE](LICENSE) for more information.

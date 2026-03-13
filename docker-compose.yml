@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  pipeline:
+    build: .
+    image: leagues-data-pipeline
+    container_name: leagues-data-pipeline
+    # Load environment variables from the .env file
+    env_file:
+      - .env
+    volumes:
+      # Map local data_lake folder so files are persisted on the host
+      - ./data_lake:/app/data_lake 
+      # Mount dbt profiles directory if you depend on ~/.dbt/profiles.yml instead of env vars
+      # - ~/.dbt:/root/.dbt
+    command: ["python", "-m", "scripts.run_pipeline"]
+
+  # Alternative service profile if you only want to run the ingestion script
+  ingest_daily:
+    build: .
+    image: leagues-data-pipeline
+    env_file:
+      - .env
+    volumes:
+      - ./data_lake:/app/data_lake
+    command: ["python", "-m", "scripts.run_daily"]
+    # We use profiles so it doesn't run automatically on `docker-compose up`
+    profiles:
+      - manual
