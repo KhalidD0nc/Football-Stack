@@ -38,6 +38,7 @@ def build_dbt_build_cmd(
     profiles_dir: Path,
     selectors: list[str],
     target: str | None = None,
+    vars_dict: dict[str, bool] | None = None,
 ) -> list[str]:
     cmd = [
         "dbt",
@@ -52,6 +53,8 @@ def build_dbt_build_cmd(
     ]
     if target:
         cmd.extend(["--target", target])
+    if vars_dict:
+        cmd.extend(["--vars", json.dumps(vars_dict)])
     return cmd
 
 
@@ -142,6 +145,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--skip-flatten", action="store_true", help="Skip JSON-to-Parquet flatten step.")
     parser.add_argument("--skip-dbt-build", action="store_true", help="Skip dbt build step.")
+
+    parser.add_argument(
+        "--enable-gold",
+        action="store_true",
+        help="Enable the Gold layer (Analytics models) during dbt build.",
+    )
+    parser.add_argument(
+        "--enable-platinum",
+        action="store_true",
+        help="Enable the Platinum layer (AI features) during dbt build.",
+    )
 
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing dbt commands.")
     return parser.parse_args()
@@ -241,11 +255,18 @@ def main() -> None:
     dbt_target = "test" if args.dev_limit else None
 
     if not args.skip_dbt_build:
+        dbt_vars = {}
+        if args.enable_gold or args.enable_platinum:
+            dbt_vars["enable_gold_layer"] = True
+        if args.enable_platinum:
+            dbt_vars["enable_platinum_layer"] = True
+
         dbt_build_cmd = build_dbt_build_cmd(
             project_dir=project_dir,
             profiles_dir=profiles_dir,
             selectors=args.select,
             target=dbt_target,
+            vars_dict=dbt_vars if dbt_vars else None,
         )
         _run_command(dbt_build_cmd, dry_run=args.dry_run, step_name="dbt_build")
     else:
