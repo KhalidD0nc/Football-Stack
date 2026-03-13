@@ -5,6 +5,7 @@ import os
 from dataclasses import dataclass, replace
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 
@@ -24,6 +25,9 @@ class PipelineConfig:
     s3_bucket: str | None = None
     gcs_bucket: str | None = None
     gcs_project: str | None = None
+    warehouse_backend: str = "none"
+    warehouse_uri: str | None = None
+    warehouse_uri_test: str | None = None
 
 
 def _require(name: str) -> str:
@@ -38,16 +42,51 @@ def _infer_backend() -> str:
     explicit = os.getenv("STORAGE_BACKEND", "").strip().lower()
     if explicit:
         return explicit
-    # If S3_BUCKET is set but STORAGE_BACKEND is not, infer s3
-    if os.getenv("S3_BUCKET", "").strip():
+    if os.getenv("GCS_BUCKET", os.getenv("GCP_BUCKET_TEST", "")).strip():
+        return "gcs"
+    if os.getenv("S3_BUCKET", os.getenv("S3_BUCKET_TEST", "")).strip():
         return "s3"
     return "local"
+
+
+def _resolve_warehouse_backend(raw_backend: str | None, warehouse_uri: str | None) -> str:
+    """Normalize the direct-load backend and reject unsupported adapters."""
+    explicit = (raw_backend or "").strip().lower()
+    if explicit == "none":
+        return "none"
+
+    if explicit == "":
+        if not warehouse_uri:
+            return "none"
+        inferred = urlsplit(warehouse_uri).scheme.strip().lower()
+        if inferred == "snowflake":
+            return "snowflake"
+        raise ValueError(
+            f"Unsupported direct warehouse backend inferred from WAREHOUSE_URI scheme '{inferred}'. "
+            "Set DATA_WAREHOUSE=none to disable direct loads."
+        )
+
+    if explicit != "snowflake":
+        raise ValueError(
+            f"Unsupported DATA_WAREHOUSE '{explicit}'. Supported values are 'snowflake' and 'none'."
+        )
+
+    if not warehouse_uri:
+        raise ValueError("DATA_WAREHOUSE='snowflake' requires WAREHOUSE_URI to be set.")
+
+    if urlsplit(warehouse_uri).scheme.strip().lower() != "snowflake":
+        raise ValueError("DATA_WAREHOUSE='snowflake' requires a snowflake:// WAREHOUSE_URI.")
+
+    return "snowflake"
 
 
 def load_config() -> PipelineConfig:
     load_dotenv()
 
     backend = _infer_backend()
+    warehouse_uri = os.getenv("WAREHOUSE_URI", "").strip() or None
+    warehouse_uri_test = os.getenv("WAREHOUSE_URI_TEST", "").strip() or None
+    warehouse_backend = _resolve_warehouse_backend(os.getenv("DATA_WAREHOUSE"), warehouse_uri)
 
     return PipelineConfig(
         api_football_key=_require("API_FOOTBALL_KEY"),
@@ -61,8 +100,11 @@ def load_config() -> PipelineConfig:
         local_root=os.getenv("LOCAL_ROOT", "data_lake"),
         aws_region=os.getenv("AWS_REGION", "us-east-1") if backend == "s3" else os.getenv("AWS_REGION"),
         s3_bucket=os.getenv("S3_BUCKET") if backend == "s3" else os.getenv("S3_BUCKET"),
-        gcs_bucket=os.getenv("GCS_BUCKET"),
+        gcs_bucket=os.getenv("GCS_BUCKET", os.getenv("GCP_BUCKET_TEST")),
         gcs_project=os.getenv("GCS_PROJECT"),
+        warehouse_backend=warehouse_backend,
+        warehouse_uri=warehouse_uri,
+        warehouse_uri_test=warehouse_uri_test,
     )
 
 
@@ -92,12 +134,22 @@ def load_configs_from_file(config_path: str | Path | None) -> list[PipelineConfi
     s3_bucket = storage_cfg.get("s3_bucket", settings.get("s3_bucket", os.getenv("S3_BUCKET", ""))).strip() or None
     aws_region = storage_cfg.get("aws_region", settings.get("aws_region", os.getenv("AWS_REGION", ""))).strip() or None
     local_root = storage_cfg.get("local_root", os.getenv("LOCAL_ROOT", "data_lake"))
-    gcs_bucket = storage_cfg.get("gcs_bucket", os.getenv("GCS_BUCKET", "")).strip() or None
+    gcs_bucket = storage_cfg.get("gcs_bucket", settings.get("gcs_bucket", os.getenv("GCS_BUCKET", os.getenv("GCP_BUCKET_TEST", "")))).strip() or None
     gcs_project = storage_cfg.get("gcs_project", os.getenv("GCS_PROJECT")) or None
+    warehouse_uri = settings.get("warehouse_uri", os.getenv("WAREHOUSE_URI", "")).strip() or None
+    warehouse_uri_test = settings.get("warehouse_uri_test", os.getenv("WAREHOUSE_URI_TEST", "")).strip() or None
+    warehouse_backend_raw = (
+        settings.get("data_warehouse")
+        or settings.get("warehouse_backend")
+        or os.getenv("DATA_WAREHOUSE", "")
+    )
+    warehouse_backend = _resolve_warehouse_backend(warehouse_backend_raw, warehouse_uri)
 
     # Infer backend if not explicit
     if backend_raw:
         backend = backend_raw
+    elif gcs_bucket:
+        backend = "gcs"
     elif s3_bucket:
         backend = "s3"
     else:
@@ -125,6 +177,9 @@ def load_configs_from_file(config_path: str | Path | None) -> list[PipelineConfi
                 s3_bucket=s3_bucket,
                 gcs_bucket=gcs_bucket,
                 gcs_project=gcs_project,
+                warehouse_backend=warehouse_backend,
+                warehouse_uri=warehouse_uri,
+                warehouse_uri_test=warehouse_uri_test,
             ))
 
     if not configs:
@@ -139,10 +194,26 @@ def resolve_run_date(run_date: str | None = None) -> date:
     return date.today()
 
 
-def with_overrides(config: PipelineConfig, league_id: int | None = None) -> PipelineConfig:
+def with_overrides(
+    config: PipelineConfig,
+    league_id: int | None = None,
+    dev_limit: int | None = None,
+) -> PipelineConfig:
     """Return a runtime-adjusted config without mutating env-derived defaults."""
-    if league_id is None:
+    changes = {}
+    if league_id is not None:
+        if league_id <= 0:
+            raise ValueError("league_id override must be a positive integer")
+        changes["league_id"] = league_id
+        
+    if dev_limit is not None:
+        s3_test = os.getenv("S3_BUCKET_TEST")
+        gcp_test = os.getenv("GCP_BUCKET_TEST")
+        if s3_test:
+            changes["s3_bucket"] = s3_test
+        if gcp_test:
+            changes["gcs_bucket"] = gcp_test
+            
+    if not changes:
         return config
-    if league_id <= 0:
-        raise ValueError("league_id override must be a positive integer")
-    return replace(config, league_id=league_id)
+    return replace(config, **changes)

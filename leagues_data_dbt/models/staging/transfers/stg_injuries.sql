@@ -1,5 +1,14 @@
 {{ config(materialized='table') }}
 
+{% if var('use_curated_parquet', false) %}
+
+{{ curated_source_latest(
+    'injuries',
+    ['player_id', 'coalesce(fixture_id, -1)', 'league_id', 'season', "coalesce(injury_type, coalesce(injury_reason, 'na'))"]
+) }}
+
+{% else %}
+
 with source_dedup as (
     select
         raw,
@@ -68,3 +77,5 @@ select
     run_id,
     _loaded_at
 from flattened
+
+{% endif %}

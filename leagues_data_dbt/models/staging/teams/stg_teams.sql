@@ -1,5 +1,11 @@
 {{ config(materialized='table') }}
 
+{% if var('use_curated_parquet', false) %}
+
+{{ curated_source_latest('teams', ['team_id', 'league_id', 'season']) }}
+
+{% else %}
+
 with source_dedup as (
     select
         raw,
@@ -63,3 +69,5 @@ final as (
 )
 
 select * from final
+
+{% endif %}

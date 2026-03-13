@@ -3,14 +3,21 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import shutil
 import subprocess
+import sys
 from datetime import date
 from pathlib import Path
 from time import perf_counter
 
+# Ensure "src" is discoverable regardless of how the script is executed
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from src.pipeline.config import load_configs_from_file, resolve_run_date, with_overrides
+from src.pipeline.flatten import normalize_warehouse_uri, run_flatten
 from src.pipeline.ingest import run_ingestion
+from src.pipeline.storage import create_writer, generate_run_id
 
 
 logger = logging.getLogger(__name__)
@@ -26,47 +33,13 @@ def _positive_int(value: str) -> int:
     return parsed
 
 
-def build_raw_sync_macro_args(
-    run_date: date | None,
-    raw_database: str | None,
-    raw_schema: str,
-    stage_name: str,
-) -> dict[str, str]:
-    macro_args: dict[str, str] = {
-        "raw_schema": raw_schema,
-        "stage_name": stage_name,
-    }
-    if run_date is not None:
-        macro_args["run_date"] = run_date.isoformat()
-    if raw_database:
-        macro_args["raw_database"] = raw_database
-    return macro_args
-
-
-def build_dbt_raw_sync_cmd(
-    project_dir: Path,
-    profiles_dir: Path,
-    macro_args: dict[str, str],
-) -> list[str]:
-    return [
-        "dbt",
-        "run-operation",
-        "sync_raw_from_s3",
-        "--project-dir",
-        str(project_dir),
-        "--profiles-dir",
-        str(profiles_dir),
-        "--args",
-        json.dumps(macro_args),
-    ]
-
-
 def build_dbt_build_cmd(
     project_dir: Path,
     profiles_dir: Path,
     selectors: list[str],
+    target: str | None = None,
 ) -> list[str]:
-    return [
+    cmd = [
         "dbt",
         "build",
         "--project-dir",
@@ -77,6 +50,26 @@ def build_dbt_build_cmd(
         "--select",
         *selectors,
     ]
+    if target:
+        cmd.extend(["--target", target])
+    return cmd
+
+
+def _resolve_warehouse_uri(uri: str | None, *, is_test: bool) -> str | None:
+    base_database = os.getenv("SNOWFLAKE_DATABASE", "").strip()
+    if is_test:
+        default_database = os.getenv("SNOWFLAKE_DATABASE_TEST", "").strip()
+        if not default_database and base_database:
+            default_database = f"{base_database}_TEST"
+    else:
+        default_database = base_database
+
+    default_schema = os.getenv("SNOWFLAKE_SCHEMA", "").strip() or "STAGING"
+    return normalize_warehouse_uri(
+        uri,
+        default_database=default_database or None,
+        default_schema=default_schema,
+    )
 
 
 def _run_command(command: list[str], dry_run: bool, step_name: str) -> None:
@@ -122,18 +115,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--project-dir", default="leagues_data_dbt", help="dbt project directory.")
     parser.add_argument("--profiles-dir", default="leagues_data_dbt", help="dbt profiles directory.")
-    parser.add_argument(
-        "--raw-database",
-        default=None,
-        help="Snowflake database for RAW tables (defaults to dbt target database).",
-    )
-    parser.add_argument("--raw-schema", default="RAW", help="Snowflake schema for RAW tables.")
-    parser.add_argument("--stage-name", default="LEAGUES_STAGE", help="Snowflake stage name for S3 raw files.")
+
     parser.add_argument(
         "--select",
         nargs="+",
-        default=["staging", "silver", "gold"],
-        help="dbt selectors to build after RAW sync.",
+        default=["staging", "silver", "gold", "platinum"],
+        help="dbt selectors to build.",
     )
     parser.add_argument("--skip-ingestion", action="store_true", help="Skip API -> S3 ingestion step.")
     parser.add_argument(
@@ -146,13 +133,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Ingestion mode: only refresh league-level baseline endpoints (minimal API calls).",
     )
-    parser.add_argument("--skip-raw-sync", action="store_true", help="Skip Snowflake RAW COPY INTO step.")
-    parser.add_argument("--skip-dbt-build", action="store_true", help="Skip dbt build step.")
     parser.add_argument(
-        "--raw-sync-all-dates",
-        action="store_true",
-        help="Load RAW files without filtering on run date.",
+        "--dev-limit",
+        dest="dev_limit",
+        type=_positive_int,
+        default=None,
+        help="Fast testing mode: max teams/fixtures/pages to fetch (e.g. 2).",
     )
+    parser.add_argument("--skip-flatten", action="store_true", help="Skip JSON-to-Parquet flatten step.")
+    parser.add_argument("--skip-dbt-build", action="store_true", help="Skip dbt build step.")
+
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing dbt commands.")
     return parser.parse_args()
 
@@ -164,11 +154,10 @@ def main() -> None:
     project_dir = Path(args.project_dir).resolve()
     profiles_dir = Path(args.profiles_dir).resolve()
     logger.info(
-        "Pipeline start run_date=%s league_id_override=%s skip_ingestion=%s skip_raw_sync=%s skip_dbt_build=%s dry_run=%s",
+        "Pipeline start run_date=%s league_id_override=%s skip_ingestion=%s skip_dbt_build=%s dry_run=%s",
         run_date.isoformat(),
         args.league_id,
         args.skip_ingestion,
-        args.skip_raw_sync,
         args.skip_dbt_build,
         args.dry_run,
     )
@@ -180,56 +169,83 @@ def main() -> None:
         if league_ids_override:
             for bc in base_configs:
                 for target_lid in league_ids_override:
-                    configs_to_run.append(with_overrides(bc, league_id=target_lid))
+                    configs_to_run.append(with_overrides(bc, league_id=target_lid, dev_limit=args.dev_limit))
         else:
-            configs_to_run = base_configs
+            configs_to_run = [with_overrides(bc, dev_limit=args.dev_limit) for bc in base_configs]
 
         for config in configs_to_run:
             step_start = perf_counter()
             logger.info(
-                "Step start: ingestion (league_id=%s season=%s baseline_only=%s force_snapshot_refresh=%s)",
+                "Step start: ingestion (league_id=%s season=%s baseline_only=%s force_snapshot_refresh=%s dev_limit=%s)",
                 config.league_id,
                 config.season,
                 args.baseline_only,
                 args.force_league_snapshot_refresh,
+                args.dev_limit,
             )
             summary = run_ingestion(
                 config,
                 run_date,
                 force_league_snapshot_refresh=args.force_league_snapshot_refresh,
                 baseline_only=args.baseline_only,
+                dev_limit=args.dev_limit,
             )
             logger.info("Step complete: ingestion league_id=%s in %.2fs", config.league_id, perf_counter() - step_start)
             logger.info("Ingestion complete league_id=%s for %s: %s", config.league_id, run_date.isoformat(), summary)
     else:
         logger.info("Skipping ingestion step")
 
-    should_run_dbt = not (args.skip_raw_sync and args.skip_dbt_build)
-    if should_run_dbt and not args.dry_run and shutil.which("dbt") is None:
-        raise RuntimeError("dbt CLI is not installed. Install dbt before running RAW sync/build steps.")
+    if not args.skip_flatten:
+        base_configs = load_configs_from_file(args.config_path)
+        flatten_configs = []
+        league_ids_override = args.league_ids or ([args.league_id] if args.league_id else [])
+        if league_ids_override:
+            for bc in base_configs:
+                for target_lid in league_ids_override:
+                    flatten_configs.append(with_overrides(bc, league_id=target_lid, dev_limit=args.dev_limit))
+        else:
+            flatten_configs = [with_overrides(bc, dev_limit=args.dev_limit) for bc in base_configs]
 
-    if not args.skip_raw_sync:
-        raw_sync_date = None if args.raw_sync_all_dates else run_date
-        macro_args = build_raw_sync_macro_args(
-            run_date=raw_sync_date,
-            raw_database=args.raw_database,
-            raw_schema=args.raw_schema,
-            stage_name=args.stage_name,
-        )
-        raw_sync_cmd = build_dbt_raw_sync_cmd(
-            project_dir=project_dir,
-            profiles_dir=profiles_dir,
-            macro_args=macro_args,
-        )
-        _run_command(raw_sync_cmd, dry_run=args.dry_run, step_name="raw_sync")
+        flatten_run_id = generate_run_id()
+        for config in flatten_configs:
+            step_start = perf_counter()
+            logger.info("Step start: flatten (league_id=%s season=%s)", config.league_id, config.season)
+            writer = create_writer(
+                config.storage_backend,
+                local_root=config.local_root,
+                s3_bucket=config.s3_bucket,
+                aws_region=config.aws_region,
+                gcs_bucket=config.gcs_bucket,
+                gcs_project=config.gcs_project,
+            )
+            
+            uri = config.warehouse_uri_test if args.dev_limit else config.warehouse_uri
+            uri = _resolve_warehouse_uri(uri, is_test=bool(args.dev_limit))
+            flatten_summary = run_flatten(
+                writer,
+                config.league_id,
+                config.season,
+                run_date,
+                flatten_run_id,
+                warehouse_backend=config.warehouse_backend,
+                warehouse_uri=uri,
+            )
+            logger.info("Step complete: flatten league_id=%s in %.2fs", config.league_id, perf_counter() - step_start)
+            logger.info("Flatten summary league_id=%s: %s", config.league_id, flatten_summary)
     else:
-        logger.info("Skipping RAW sync step")
+        logger.info("Skipping flatten step")
+
+    if not args.skip_dbt_build and not args.dry_run and shutil.which("dbt") is None:
+        raise RuntimeError("dbt CLI is not installed. Install dbt before running build steps.")
+
+    dbt_target = "test" if args.dev_limit else None
 
     if not args.skip_dbt_build:
         dbt_build_cmd = build_dbt_build_cmd(
             project_dir=project_dir,
             profiles_dir=profiles_dir,
             selectors=args.select,
+            target=dbt_target,
         )
         _run_command(dbt_build_cmd, dry_run=args.dry_run, step_name="dbt_build")
     else:

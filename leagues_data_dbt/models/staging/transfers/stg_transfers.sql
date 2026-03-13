@@ -1,5 +1,14 @@
 {{ config(materialized='table') }}
 
+{% if var('use_curated_parquet', false) %}
+
+{{ curated_source_latest(
+    'transfers',
+    ['league_id', 'season', 'player_id', 'transfer_date', 'coalesce(from_team_id, -1)', 'coalesce(to_team_id, -1)', "coalesce(transfer_type, 'na')"]
+) }}
+
+{% else %}
+
 with source_dedup as (
     select
         raw,
@@ -95,3 +104,5 @@ select
     run_id,
     _loaded_at
 from deduped
+
+{% endif %}

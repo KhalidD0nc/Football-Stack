@@ -1,5 +1,14 @@
 {{ config(materialized='table') }}
 
+{% if var('use_curated_parquet', false) %}
+
+{{ curated_source_latest(
+    'player_season_stats',
+    ['player_id', 'team_id', 'stats_season', 'stats_league_id', 'league_id', 'season']
+) }}
+
+{% else %}
+
 with source_dedup as (
     select
         raw,
@@ -172,3 +181,5 @@ qualify row_number() over (
     partition by player_id, team_id, stats_season, stats_league_id, league_id, season
     order by _loaded_at desc
 ) = 1
+
+{% endif %}

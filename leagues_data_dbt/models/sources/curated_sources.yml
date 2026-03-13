@@ -1,0 +1,38 @@
+version: 2
+
+sources:
+  - name: curated
+    description: "Pre-flattened tabular data natively pushed by Python. Replaces raw VARIANT + LATERAL FLATTEN."
+    database: "{{ var('curated_database', target.database) }}"
+    schema: "{{ var('curated_schema', 'STAGING') }}"
+    tables:
+      - name: teams
+        description: "Team information and venue details."
+      - name: fixtures
+        description: "Match fixtures with teams, scores, and status."
+      - name: rounds
+        description: "League round/stage names with round numbers."
+      - name: match_events
+        description: "In-match events (goals, cards, substitutions)."
+      - name: match_team_stats
+        description: "Team-level per-fixture statistics (wide format)."
+      - name: match_player_stats
+        description: "Per-player per-match performance statistics."
+      - name: lineup_players
+        description: "Starting XI and substitute players per fixture."
+      - name: predictions
+        description: "Pre-match predictions and comparison metrics."
+      - name: player_season_stats
+        description: "Player season-level statistics across all competitions."
+      - name: player_leaderboards
+        description: "Top scorers, assists, yellow cards, red cards rankings."
+      - name: squad_players
+        description: "Current squad roster by team."
+      - name: team_standings
+        description: "League standings with home/away breakdowns."
+      - name: team_statistics
+        description: "Team aggregate season statistics."
+      - name: transfers
+        description: "Player transfer history."
+      - name: injuries
+        description: "Player injury records."

@@ -62,6 +62,25 @@ class StorageWriter(ABC):
         body: dict[str, Any],
     ) -> str: ...
 
+    @abstractmethod
+    def put_curated(
+        self,
+        league_id: int,
+        season: int,
+        endpoint: str,
+        dt: date,
+        run_id: str,
+        data: bytes,
+    ) -> str: ...
+
+    @abstractmethod
+    def list_raw(
+        self, league_id: int, season: int, endpoint: str, dt: date
+    ) -> list[str]: ...
+
+    @abstractmethod
+    def get_raw(self, key: str) -> dict[str, Any]: ...
+
 
 # ── LocalFileWriter ─────────────────────────────────────────────────────────
 
@@ -97,6 +116,44 @@ class LocalFileWriter(StorageWriter):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(body), encoding="utf-8")
         return key
+
+    def put_curated(
+        self,
+        league_id: int,
+        season: int,
+        endpoint: str,
+        dt: date,
+        run_id: str,
+        data: bytes,
+    ) -> str:
+        ep = normalize_endpoint(endpoint)
+        key = (
+            f"curated/source=api_football/league={league_id}/season={season}/"
+            f"endpoint={ep}/dt={dt.isoformat()}/run_id={run_id}/data.parquet"
+        )
+        path = self.root / key
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        return key
+
+    def list_raw(
+        self, league_id: int, season: int, endpoint: str, dt: date
+    ) -> list[str]:
+        ep = normalize_endpoint(endpoint)
+        prefix = (
+            self.root
+            / f"raw/source=api_football/league={league_id}/season={season}"
+            / f"endpoint={ep}/dt={dt.isoformat()}"
+        )
+        if not prefix.exists():
+            return []
+        return sorted(
+            str(p.relative_to(self.root)) for p in prefix.rglob("*.json")
+        )
+
+    def get_raw(self, key: str) -> dict[str, Any]:
+        path = self.root / key
+        return json.loads(path.read_text(encoding="utf-8"))
 
 
 # ── S3Writer ─────────────────────────────────────────────────────────────────
@@ -152,6 +209,48 @@ class S3Writer(StorageWriter):
         )
         return key
 
+    def put_curated(
+        self,
+        league_id: int,
+        season: int,
+        endpoint: str,
+        dt: date,
+        run_id: str,
+        data: bytes,
+    ) -> str:
+        ep = normalize_endpoint(endpoint)
+        key = (
+            f"curated/source=api_football/league={league_id}/season={season}/"
+            f"endpoint={ep}/dt={dt.isoformat()}/run_id={run_id}/data.parquet"
+        )
+        self.s3.put_object(
+            Bucket=self.bucket,
+            Key=key,
+            Body=data,
+            ContentType="application/octet-stream",
+        )
+        return key
+
+    def list_raw(
+        self, league_id: int, season: int, endpoint: str, dt: date
+    ) -> list[str]:
+        ep = normalize_endpoint(endpoint)
+        prefix = (
+            f"raw/source=api_football/league={league_id}/season={season}/"
+            f"endpoint={ep}/dt={dt.isoformat()}/"
+        )
+        keys: list[str] = []
+        paginator = self.s3.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                if obj["Key"].endswith(".json"):
+                    keys.append(obj["Key"])
+        return sorted(keys)
+
+    def get_raw(self, key: str) -> dict[str, Any]:
+        resp = self.s3.get_object(Bucket=self.bucket, Key=key)
+        return json.loads(resp["Body"].read().decode("utf-8"))
+
 
 # ── GCSWriter ────────────────────────────────────────────────────────────────
 
@@ -194,6 +293,42 @@ class GCSWriter(StorageWriter):
         blob = self._bucket.blob(key)
         blob.upload_from_string(json.dumps(body), content_type="application/json")
         return key
+
+    def put_curated(
+        self,
+        league_id: int,
+        season: int,
+        endpoint: str,
+        dt: date,
+        run_id: str,
+        data: bytes,
+    ) -> str:
+        ep = normalize_endpoint(endpoint)
+        key = (
+            f"curated/source=api_football/league={league_id}/season={season}/"
+            f"endpoint={ep}/dt={dt.isoformat()}/run_id={run_id}/data.parquet"
+        )
+        blob = self._bucket.blob(key)
+        blob.upload_from_string(data, content_type="application/octet-stream")
+        return key
+
+    def list_raw(
+        self, league_id: int, season: int, endpoint: str, dt: date
+    ) -> list[str]:
+        ep = normalize_endpoint(endpoint)
+        prefix = (
+            f"raw/source=api_football/league={league_id}/season={season}/"
+            f"endpoint={ep}/dt={dt.isoformat()}/"
+        )
+        return sorted(
+            blob.name
+            for blob in self._bucket.list_blobs(prefix=prefix)
+            if blob.name.endswith(".json")
+        )
+
+    def get_raw(self, key: str) -> dict[str, Any]:
+        blob = self._bucket.blob(key)
+        return json.loads(blob.download_as_string().decode("utf-8"))
 
 
 # ── Factory ──────────────────────────────────────────────────────────────────

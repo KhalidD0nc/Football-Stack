@@ -1,5 +1,15 @@
 {{ config(materialized='table') }}
 
+{% if var('use_curated_parquet', false) %}
+
+{{ curated_source_latest(
+    'match_player_stats',
+    ['league_id', 'season', 'fixture_id', 'team_id', 'player_id'],
+    ['coalesce(minutes_played, -1) desc', 'coalesce(rating, -1) desc', '_loaded_at desc nulls last', 'dt desc nulls last', 'run_id desc nulls last']
+) }}
+
+{% else %}
+
 with source_dedup as (
     select
         raw,
@@ -180,3 +190,5 @@ select
     run_id,
     _loaded_at
 from deduped
+
+{% endif %}

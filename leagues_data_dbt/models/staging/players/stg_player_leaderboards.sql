@@ -1,5 +1,11 @@
 {{ config(materialized='table') }}
 
+{% if var('use_curated_parquet', false) %}
+
+{{ curated_source_latest('player_leaderboards', ['league_id', 'season', 'ranking_type', 'player_id']) }}
+
+{% else %}
+
 with top_scorers_source as (
     select
         raw,
@@ -218,3 +224,5 @@ select
     run_id,
     _loaded_at
 from final
+
+{% endif %}

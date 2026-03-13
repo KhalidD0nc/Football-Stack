@@ -1,5 +1,11 @@
 {{ config(materialized='table') }}
 
+{% if var('use_curated_parquet', false) %}
+
+{{ curated_source_latest('match_team_stats', ['fixture_id', 'team_id']) }}
+
+{% else %}
+
 with source_dedup as (
     select
         raw,
@@ -128,3 +134,5 @@ select
     run_id,
     _loaded_at
 from final
+
+{% endif %}
