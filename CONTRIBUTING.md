@@ -1,6 +1,6 @@
-# Contributing to Leagues Data Project
+# Contributing to Football-Stack
 
-First off, thank you for considering contributing to the Leagues Data Project! It's people like you that make the open source community such a great place to learn, inspire, and create.
+First off, thank you for considering contributing to Football-Stack! It's people like you that make the open source community such a great place to learn, inspire, and create.
 
 ## Getting Started
 

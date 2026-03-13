@@ -1,4 +1,4 @@
-# Leagues Data Project
+# Football-Stack
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
@@ -6,14 +6,14 @@
 
 **Are you looking to build a data-driven football product, train Machine Learning models, or power AI agents with high-quality sports analytics?**
 
-**Leagues Data Project** is your starting point. It is an end-to-end data engineering pipeline that automates the ingestion, storage, and transformation of football (soccer) league data via [API-Football](https://www.api-football.com/). 
+**Football-Stack** is your starting point. It is an end-to-end data engineering pipeline that automates the ingestion, storage, and transformation of football (soccer) league data via [API-Football](https://www.api-football.com/). 
 
 💡 **Cost-Efficient & High Performance:** We built this architecture with a relentless focus on minimizing operational costs while maximizing performance. By utilizing intelligent idempotency (to eliminate redundant and costly API calls), local-first development options, and optimized data processing, we drastically lowered the cost of running a large-scale sports data pipeline.
 
 It is designed to be fully extensible, supporting any league globally without hardcoded defaults, and orchestrates data from raw API payloads all the way to agent-ready AI features.
 
 <div align="center">
-  <img src="resources/pipeline_diagram.png" alt="Leagues Data Project Pipeline Diagram" />
+  <img src="resources/pipeline_diagram.png" alt="Football-Stack Pipeline Diagram" />
 </div>
 
 ## Data Architecture Philosophy
