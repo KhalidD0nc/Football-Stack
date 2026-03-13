@@ -995,7 +995,7 @@ def warehouse_identifier(table_name: str, warehouse_uri: str | None = None) -> s
 
 def warehouse_table_name(output_table: str) -> str:
     """Physical Snowflake table name for flattened curated outputs."""
-    return output_table
+    return output_table.upper()
 
 
 def warehouse_table_identifier(output_table: str, warehouse_uri: str | None = None) -> str:
@@ -1028,7 +1028,7 @@ def _replace_snowflake_slice(
 
     target_identifier = warehouse_table_identifier(output_table, warehouse_uri)
     temp_suffix = re.sub(r"[^A-Za-z0-9_]", "_", run_id)[:48]
-    temp_table_name = f"__tmp_{warehouse_table_name(output_table)}_{temp_suffix}".lower()
+    temp_table_name = f"__tmp_{warehouse_table_name(output_table)}_{temp_suffix}".upper()
     temp_identifier = warehouse_identifier(temp_table_name, warehouse_uri)
     quoted_target = _quote_sql_identifier(target_identifier)
     quoted_temp = _quote_sql_identifier(temp_identifier)
@@ -1037,7 +1037,7 @@ def _replace_snowflake_slice(
 
     try:
         df.write_database(
-            table_name=temp_identifier,
+            table_name=temp_table_name,
             connection=warehouse_uri,
             if_table_exists="replace",
         )
