@@ -74,6 +74,17 @@ Backward compat: if `STORAGE_BACKEND` is unset but `S3_BUCKET` is set, the backe
 
 ## Quick Start
 
+### 🐳 Docker (The Easiest Way)
+
+You can run the entire pipeline with a single command using Docker. Ensure Docker and Docker Compose are installed.
+
+1. Ensure your `.env` file is ready with the required API keys.
+2. Run the end-to-end pipeline:
+   ```bash
+   docker-compose up
+   ```
+   This will automatically build the image, install Python and dbt dependencies, and execute the full pipeline. The ingested data will be stored safely in your local `data_lake/` folder via volume mapping.
+
 ### Python Ingestion
 To run the daily ingestion script:
 
