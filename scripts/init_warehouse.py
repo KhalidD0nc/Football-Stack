@@ -1,7 +1,7 @@
 import argparse
 import logging
-import os
 import sys
+from urllib.parse import urlsplit, urlunsplit
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
@@ -35,8 +35,9 @@ def init_infrastructure(is_test: bool):
     # This is a slightly hacky but effective way to ensure we don't connect to a DB that doesn't exist yet.
     # We replace the hardcoded database with 'SNOWFLAKE' (which always exists).
     
-    base_uri = getattr(uri, 'replace', lambda x,y: uri)(f"/LEAGUES_DATA_TEST/STAGING", "/SNOWFLAKE/PUBLIC")
-    base_uri = base_uri.replace(f"/LEAGUES_DATA/STAGING", "/SNOWFLAKE/PUBLIC")
+    parts = urlsplit(uri)
+    new_parts = parts._replace(path="/SNOWFLAKE/PUBLIC")
+    base_uri = urlunsplit(new_parts)
     
     target_db = "LEAGUES_DATA_TEST" if is_test else "LEAGUES_DATA"
 

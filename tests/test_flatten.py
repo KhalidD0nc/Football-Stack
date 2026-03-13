@@ -113,8 +113,7 @@ class TestWarehouseHelpers:
             "injuries",
             "snowflake://user:pass@example.snowflakecomputing.com/LEAGUES_DATA_TEST/STAGING",
         )
-
-        assert identifier == "STAGING.injuries"
+        assert identifier == "LEAGUES_DATA_TEST.STAGING.INJURIES"
 
     def test_empty_dataframe_preserves_schema(self) -> None:
         df = _empty_dataframe_from_schema(SCHEMAS["injuries"])
@@ -168,7 +167,7 @@ class TestWarehouseHelpers:
         )
 
         assert summary["injuries"] == 0
-        assert captured["STAGING.injuries"] == SCHEMAS["injuries"].names
+        assert captured["LEAGUES_DATA_TEST.STAGING.INJURIES"] == SCHEMAS["injuries"].names
 
     def test_run_flatten_raises_when_warehouse_sync_fails(
         self,
@@ -205,7 +204,7 @@ class TestWarehouseHelpers:
 
         monkeypatch.setattr("src.pipeline.flatten._replace_snowflake_slice", fake_replace_snowflake_slice)
 
-        with pytest.raises(WarehouseSyncError, match="STAGING.injuries"):
+        with pytest.raises(WarehouseSyncError, match="LEAGUES_DATA_TEST.STAGING.INJURIES"):
             run_flatten(
                 writer,
                 league_id,

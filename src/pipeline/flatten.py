@@ -908,8 +908,7 @@ def _entity_dedup(
     )
 
     # Sort and deduplicate
-    order_by = [(col, "descending") for col in order_cols_desc]
-    df = df.sort(order_cols_desc, descending=[True] * len(order_cols_desc), nulls_last=True)
+    df = df.sort(sort_exprs, descending=True, nulls_last=True)
     df = df.unique(subset=actual_partition, keep="first")
 
     # Drop helper columns
