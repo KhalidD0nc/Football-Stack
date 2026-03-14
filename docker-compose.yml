@@ -1,21 +1,40 @@
 version: '3.8'
 
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile.airflow
+  image: football-stack-airflow
+  env_file:
+    - .env
+  environment:
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    AIRFLOW__CORE__DAGS_FOLDER: /app/airflow/dags
+    AIRFLOW_HOME: /app/airflow
+  volumes:
+    - ./data_lake:/app/data_lake
+    - ./airflow/dags:/app/airflow/dags
+    # Optional: mount your pipeline_config.json for multi-league runs.
+    # Copy pipeline_config.json.example -> pipeline_config.json first, then uncomment:
+    # - ./pipeline_config.json:/app/pipeline_config.json:ro
+  depends_on:
+    postgres:
+      condition: service_healthy
+
 services:
+  # ── Existing pipeline services ──────────────────────────────────────────────
   pipeline:
     build: .
     image: leagues-data-pipeline
     container_name: leagues-data-pipeline
-    # Load environment variables from the .env file
     env_file:
       - .env
     volumes:
-      # Map local data_lake folder so files are persisted on the host
-      - ./data_lake:/app/data_lake 
-      # Mount dbt profiles directory if you depend on ~/.dbt/profiles.yml instead of env vars
-      # - ~/.dbt:/root/.dbt
+      - ./data_lake:/app/data_lake
     command: ["python", "-m", "scripts.run_pipeline"]
 
-  # Alternative service profile if you only want to run the ingestion script
   ingest_daily:
     build: .
     image: leagues-data-pipeline
@@ -24,6 +43,78 @@ services:
     volumes:
       - ./data_lake:/app/data_lake
     command: ["python", "-m", "scripts.run_daily"]
-    # We use profiles so it doesn't run automatically on `docker-compose up`
     profiles:
       - manual
+
+  # ── Airflow infrastructure ─────────────────────────────────────────────────
+  postgres:
+    image: postgres:15
+    container_name: airflow-postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - airflow
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow-init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate &&
+        airflow users create \
+          --username admin \
+          --password "$${AIRFLOW_ADMIN_PASSWORD:-admin}" \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com || true
+    restart: "no"
+    profiles:
+      - airflow
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow-webserver
+    command: airflow webserver --port 8080
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    profiles:
+      - airflow
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow-scheduler
+    command: airflow scheduler
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    profiles:
+      - airflow
+
+volumes:
+  airflow-pg-data:

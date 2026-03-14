@@ -1,0 +1,34 @@
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# System deps
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pipeline dependencies + Airflow + dbt
+COPY requirements.txt .
+RUN pip install --no-cache-dir \
+    -r requirements.txt \
+    dbt-snowflake \
+    pytest \
+    "apache-airflow[postgres]==2.10.4" \
+    --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.9.txt"
+
+# Copy project source
+COPY . .
+
+# Install dbt packages
+RUN cd leagues_data_dbt && dbt deps
+
+# Airflow home inside the container
+ENV AIRFLOW_HOME=/app/airflow
+ENV AIRFLOW__CORE__DAGS_FOLDER=/app/airflow/dags
+ENV AIRFLOW__CORE__LOAD_EXAMPLES=False
+ENV AIRFLOW__CORE__EXECUTOR=LocalExecutor
+
+# Pipeline defaults
+ENV STORAGE_BACKEND=local
+ENV LOCAL_ROOT=/app/data_lake

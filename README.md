@@ -192,7 +192,41 @@ python -m scripts.run_pipeline --enable-gold --enable-platinum
 Season selection note:
 - `SEASON` is always read from `.env` (`SEASON=...`), including when `--league-id` is used.
 
-If you want it fully unattended on one machine, schedule it with `cron`:
+### Airflow Orchestration (Optional)
+
+For production scheduling with a web UI, retry logic, and parallel league processing, the project includes an Apache Airflow setup. All Airflow services run behind a Docker Compose `airflow` profile, so they never interfere with the existing CLI workflow.
+
+**Start the Airflow stack:**
+
+```bash
+# 1. Initialize the database and create an admin user
+docker compose --profile airflow up postgres airflow-init
+
+# 2. Start the webserver and scheduler
+docker compose --profile airflow up airflow-webserver airflow-scheduler
+```
+
+Open **http://localhost:8080** and log in with `admin` / `admin` (or the password set in `AIRFLOW_ADMIN_PASSWORD`).
+
+**Available DAGs:**
+
+| DAG | Schedule | Description |
+|-----|----------|-------------|
+| `football_pipeline` | Manual trigger | Full pipeline: ingest → flatten → dbt build. Dynamically maps tasks over all league/season targets in `pipeline_config.json` for parallel execution. |
+| `football_daily_ingest` | `@daily` | Lightweight single-league daily ingestion (mirrors `run_daily.py`). |
+
+Trigger `football_pipeline` from the UI with custom params like `{"dev_limit": 2}` for a quick test run.
+
+**Airflow environment variables** (add to `.env`):
+
+| Variable | Purpose |
+|----------|---------|
+| `AIRFLOW__CORE__FERNET_KEY` | Encryption key for Airflow connections/variables |
+| `AIRFLOW_ADMIN_PASSWORD` | Password for the Airflow admin user (default: `admin`) |
+
+> **Note:** The existing CLI scripts (`run_pipeline.py`, `run_daily.py`) and the base Docker image remain fully functional — Airflow is purely additive.
+
+If you prefer a simpler cron-based schedule instead of Airflow:
 
 ```bash
 15 3 * * * cd /path/to/Leagues_Data_Project && /bin/zsh -lc 'source .venv/bin/activate && python -m scripts.run_pipeline >> logs/pipeline.log 2>&1'
@@ -230,6 +264,7 @@ dbt docs serve
 ## Project Structure
 - `src/pipeline/`: Core ingestion logic (API client, storage, orchestration).
 - `leagues_data_dbt/`: dbt project for SQL transformations.
+- `airflow/dags/`: Airflow DAG definitions for pipeline orchestration.
 - `scripts/`: Operational scripts and entry points.
 - `docs/`: Strategic architecture and implementation tracking.
 - `tests/`: Unit and integration tests for the Python pipeline.
