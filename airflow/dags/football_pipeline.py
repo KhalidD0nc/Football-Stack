@@ -31,9 +31,9 @@ logger = logging.getLogger(__name__)
 DAG_PARAMS = {
     "run_date": Param(default="", type="string", description="YYYY-MM-DD (empty = today)"),
     "config_path": Param(
-        default="pipeline_config.json",
+        default="",
         type="string",
-        description="Path to pipeline_config.json relative to project root",
+        description="Path to pipeline_config.json relative to project root. Empty = use LEAGUE_ID/SEASON env vars.",
     ),
     "baseline_only": Param(default=False, type="boolean"),
     "force_league_snapshot_refresh": Param(default=False, type="boolean"),

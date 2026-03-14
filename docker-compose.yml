@@ -16,7 +16,9 @@ x-airflow-common: &airflow-common
   volumes:
     - ./data_lake:/app/data_lake
     - ./airflow/dags:/app/airflow/dags
-    - ./pipeline_config.json:/app/pipeline_config.json:ro
+    # Optional: mount your pipeline_config.json for multi-league runs.
+    # Copy pipeline_config.json.example -> pipeline_config.json first, then uncomment:
+    # - ./pipeline_config.json:/app/pipeline_config.json:ro
   depends_on:
     postgres:
       condition: service_healthy
