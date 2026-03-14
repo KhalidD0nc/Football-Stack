@@ -12,12 +12,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s - %(me
 logger = logging.getLogger(__name__)
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Download tables from the GOLD schema as CSV.")
+    parser = argparse.ArgumentParser(description="Download tables from the silver schema as CSV.")
     parser.add_argument("--test", action="store_true", help="Download from the TEST database instead of production.")
-    parser.add_argument("--output-dir", type=str, default="./exports/gold", help="Directory to save the CSV files.")
+    parser.add_argument("--output-dir", type=str, default="./exports", help="Directory to save the CSV files.")
     return parser.parse_args()
 
-def download_gold_tables(is_test: bool, output_dir: str):
+def download_silver_tables(is_test: bool, output_dir: str):
     load_dotenv()
     
     # Select the URI based on the --test flag
@@ -37,34 +37,34 @@ def download_gold_tables(is_test: bool, output_dir: str):
         engine = create_engine(uri)
         
         with engine.connect() as conn:
-            # Query the information_schema to get all tables in the GOLD schema
+            # Query the information_schema to get all tables in the SILVER schema
             query = text(f"""
                 SELECT TABLE_NAME 
                 FROM {target_db}.INFORMATION_SCHEMA.TABLES 
-                WHERE TABLE_SCHEMA = 'GOLD' AND TABLE_TYPE = 'BASE TABLE'
+                WHERE TABLE_SCHEMA = 'SILVER' AND TABLE_TYPE = 'BASE TABLE'
             """)
             
             result = conn.execute(query)
             tables = [row[0] for row in result]
             
             if not tables:
-                logger.warning(f"No tables found in the GOLD schema of {target_db}.")
+                logger.warning(f"No tables found in the SILVER schema of {target_db}.")
                 return
 
-            logger.info(f"Found {len(tables)} tables in GOLD schema. Starting download...")
+            logger.info(f"Found {len(tables)} tables in SILVER schema. Starting download...")
             
             for table in tables:
-                # Remove 'GOLD_' prefix from the table name
+                # Remove 'SILVER_' prefix from the table name
                 clean_name = table.lower()
-                if clean_name.startswith("gold_"):
-                    clean_name = clean_name[len("gold_"):]
+                if clean_name.startswith("silver_"):
+                    clean_name = clean_name[len("silver_"):]
                 
                 output_path = os.path.join(output_dir, f"{clean_name}.csv")
                 
                 logger.info(f"Downloading table '{table}' to '{output_path}'...")
                 
                 # Fetch data and save as CSV
-                df = pd.read_sql(text(f"SELECT * FROM {target_db}.GOLD.{table}"), conn)
+                df = pd.read_sql(text(f"SELECT * FROM {target_db}.SILVER.{table}"), conn)
                 df.to_csv(output_path, index=False)
                 
                 logger.info(f"Successfully saved {len(df)} rows to '{output_path}'.")
@@ -74,7 +74,7 @@ def download_gold_tables(is_test: bool, output_dir: str):
     except ImportError:
         logger.error(
             "Missing required packages. "
-            "Ensure you have pandas, sqlalchemy, and snowflake-sqlalchemy installed."
+            "Ensure you have pandas, sqlalchemy, and snowflake-snowflake-sqlalchemy installed."
         )
         sys.exit(1)
     except Exception as e:
@@ -83,4 +83,4 @@ def download_gold_tables(is_test: bool, output_dir: str):
 
 if __name__ == "__main__":
     args = parse_args()
-    download_gold_tables(args.test, args.output_dir)
+    download_silver_tables(args.test, args.output_dir)
