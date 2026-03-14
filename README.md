@@ -4,9 +4,8 @@
 ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![dbt](https://img.shields.io/badge/dbt-compatible-orange.svg)
 
-**Are you looking to build a data-driven football product, train Machine Learning models, or power AI agents with high-quality sports analytics?**
+**Football-Stack** It is an end-to-end data engineering pipeline that automates the ingestion, storage, and transformation of football (soccer) league data via [API-Football](https://www.api-football.com/). 
 
-**Football-Stack** is your starting point. It is an end-to-end data engineering pipeline that automates the ingestion, storage, and transformation of football (soccer) league data via [API-Football](https://www.api-football.com/). 
 
 💡 **Cost-Efficient & High Performance:** We built this architecture with a relentless focus on minimizing operational costs while maximizing performance. By utilizing intelligent idempotency (to eliminate redundant and costly API calls), local-first development options, and optimized data processing, we drastically lowered the cost of running a large-scale sports data pipeline.
 
@@ -16,10 +15,35 @@ It is designed to be fully extensible, supporting any league globally without ha
   <img src="resources/pipeline_diagram.png" alt="Football-Stack Pipeline Diagram" />
 </div>
 
-## Data Architecture Philosophy
+## Data Architecture 
+
+### Architecture overview:
+API-Football → Python ingestion → Data Lake (Local/S3/GCS) → Snowflake → dbt models → Analytics & AI features
 
 - **Staging & Silver Layers (Objective Prep):** These layers strictly focus on cleaning, normalizing, deduplicating, and standardizing the raw JSON data. They are universal and provide a solid, trusted foundation perfectly mirroring the API.
 - **Gold & Platinum Layers (Subjective & Use-case Driven):** These layers construct business logic and AI-ready features. Metrics like "Team Form," "Attacking Style," or "Player Impact" are highly subjective and depend heavily on your product's specific needs. We have provided **rich, pre-built Gold and Platinum models** as powerful starting points, but you have the flexibility to customize or replace these logic layers to fit your exact goals.
+
+## Tech Stack
+
+### Core
+<p align="left">
+  <img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/dbt-Analytics%20Engineering-FF694B?style=for-the-badge&logo=dbt&logoColor=white" alt="dbt" />
+  <img src="https://img.shields.io/badge/Snowflake-Cloud%20Warehouse-29B5E8?style=for-the-badge&logo=snowflake&logoColor=white" alt="Snowflake" />
+</p>
+
+### Storage
+<p align="left">
+  <img src="https://img.shields.io/badge/AWS%20S3-Data%20Lake-569A31?style=for-the-badge&logo=amazons3&logoColor=white" alt="AWS S3" />
+  <img src="https://img.shields.io/badge/Google%20Cloud%20Storage-Object%20Storage-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white" alt="Google Cloud Storage" />
+  <img src="https://img.shields.io/badge/Local%20Filesystem-Default%20Backend-4B5563?style=for-the-badge&logo=files&logoColor=white" alt="Local Filesystem" />
+</p>
+
+### Source & Execution
+<p align="left">
+  <img src="https://img.shields.io/badge/API--Football-Data%20Provider-111827?style=for-the-badge&logo=football&logoColor=white" alt="API-Football" />
+  <img src="https://img.shields.io/badge/Docker-Execution%20Environment-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
+</p>
 
 ## Features
 
