@@ -6,7 +6,6 @@ Config is loaded at task runtime (not DAG parse time) to avoid stale state.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import sys
@@ -49,6 +48,7 @@ def _resolve_run_date(raw: str) -> date:
     return date.today()
 
 
+# TODO: add a DAG-bag parsing test in tests/ to catch import/syntax regressions
 @dag(
     dag_id="football_pipeline",
     description="End-to-end football data pipeline: ingest -> flatten -> dbt build",
@@ -85,7 +85,7 @@ def football_pipeline():
     @task(retries=2, retry_delay=timedelta(minutes=2), execution_timeout=timedelta(hours=3))
     def ingest_league(config_dict: dict, **context) -> dict:
         """Run ingestion for a single league/season target."""
-        from src.pipeline.config import PipelineConfig, resolve_run_date, with_overrides
+        from src.pipeline.config import PipelineConfig, with_overrides
         from src.pipeline.ingest import run_ingestion
 
         params = context["params"]
@@ -116,7 +116,7 @@ def football_pipeline():
     @task(execution_timeout=timedelta(hours=1))
     def flatten_league(config_dict: dict, **context) -> dict:
         """Flatten raw JSON to Parquet for a single league/season target."""
-        from src.pipeline.config import PipelineConfig, resolve_run_date, with_overrides
+        from src.pipeline.config import PipelineConfig, with_overrides
         from src.pipeline.flatten import normalize_warehouse_uri, run_flatten
         from src.pipeline.storage import create_writer, generate_run_id
 

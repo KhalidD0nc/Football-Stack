@@ -45,7 +45,7 @@ def football_daily_ingest():
 
     @task(retries=2, retry_delay=timedelta(minutes=2), execution_timeout=timedelta(hours=3))
     def ingest(**context) -> dict:
-        from src.pipeline.config import load_config, resolve_run_date, with_overrides
+        from src.pipeline.config import load_config
         from src.pipeline.ingest import run_ingestion
 
         params = context["params"]

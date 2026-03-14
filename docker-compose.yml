@@ -90,6 +90,11 @@ services:
     ports:
       - "8080:8080"
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
       interval: 30s
@@ -103,6 +108,11 @@ services:
     container_name: airflow-scheduler
     command: airflow scheduler
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
     profiles:
       - airflow
 
