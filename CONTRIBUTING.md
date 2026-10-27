@@ -1,64 +1,40 @@
 # Contributing to Football-Stack
 
-First off, thank you for considering contributing to Football-Stack! It's people like you that make the open source community such a great place to learn, inspire, and create.
+## Contribution scope
 
-## Getting Started
+Contributions to league/season configuration, dbt models, tests, and documentation are welcome. The existing project policy asks contributors to open an issue before proposing ingestion-layer changes; preserve that discussion step for API fetching and ingestion logic.
 
-1. **Fork the repository** and clone it locally.
-2. **Create a branch** for your feature or bug fix:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
+## Branch workflow
 
-## What to Contribute
+```text
+feature/* → development → staging → main
+```
 
-**✅ Supported Contributions:**
-- Adding new leagues and seasons to the configuration.
-- Enhancing or adding new data models in the **dbt layer** (`leagues_data_dbt/`).
-- Improving documentation (`docs/` or `README.md`).
+1. Branch from `development` for a focused change and open a pull request back to it.
+2. Promote a tested candidate from `development` into `staging` through a pull request.
+3. Validate against the intended resources, then promote `staging` into `main`.
+4. Synchronize any direct hotfix to `main` back into the other two branches.
 
-**🚫 Ingestion Layer Changes:**
-- Direct edits to the **Ingestion Layer** (e.g., Python scripts fetching data from API-Football) are **NOT** open for direct pull requests at this time. 
-- If you find a bug or have a suggestion for the ingestion logic, please **open an issue** to discuss it first.
+Branches organize source changes. Resource isolation, scheduling, branch protection, and approvals are configured separately.
 
-## Development Setup
+## Local setup and checks
 
-1. **Python Environment**: Initialize a virtual environment and install dependencies.
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-dev.txt
+python -m pytest tests/ -q
 
-2. **Configuration**: Copy the example environment file and fill in your credentials.
-   ```bash
-   cp .env.example .env
-   ```
-   At minimum, you need `API_FOOTBALL_KEY`, `LEAGUE_ID`, and `SEASON`. Storage defaults to the local filesystem (`data_lake/` directory).
+dbt parse --project-dir leagues_data_dbt --profiles-dir .github/dbt \
+  --no-partial-parse --vars '{"enable_gold_layer": true, "enable_platinum_layer": true}'
+```
 
-3. **dbt Setup**:
-   To work on data models, navigate to the `leagues_data_dbt` directory and install dependencies:
-   ```bash
-   cd leagues_data_dbt
-   dbt deps
-   ```
+The `.github/dbt` profile uses offline placeholders. For actual dbt execution, copy `leagues_data_dbt/profiles.yml.example` to the ignored `profiles.yml`, configure the intended Snowflake database, and run the modified models and their data tests. See the [dbt guide](leagues_data_dbt/README.md).
 
-## Workflow
+## Pull requests
 
-- **Python Code**: Ensure your code is clean and tested. Run existing tests before submitting a PR.
-  ```bash
-  pytest tests/
-  ```
-- **dbt Models**: When adding new models or modifying existing ones, ensure your models compile and pass dbt tests.
-  ```bash
-  dbt build -s your_modified_model
-  ```
-- **Documentation**: Update the `docs/` or `README.md` if your changes impact the project architecture or how to run it.
-
-## Pull Request Guidelines
-
-1. Make sure your PR description clearly states what you changed and why.
-2. Link any relevant issues to the PR.
-3. Keep your commits concise and use descriptive commit messages.
-
-Thank you for contributing!
+- Explain the change and keep commits focused.
+- Cover changed transformation behavior with relevant fixture/schema cases.
+- Update setup and operational examples when flags or contracts change.
+- State whether verification was offline or used live API/warehouse resources.
+- Keep credentials, private keys, local data lakes, and real dbt profiles out of commits.
