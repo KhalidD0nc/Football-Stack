@@ -1,0 +1,13 @@
+# Offline parsing only: these values cannot authenticate to a real warehouse.
+leagues_data_dbt:
+  target: ci
+  outputs:
+    ci:
+      type: snowflake
+      account: offline-placeholder
+      user: offline-placeholder
+      password: not-a-credential
+      database: LEAGUES_DATA
+      warehouse: OFFLINE
+      schema: STAGING
+      threads: 1
